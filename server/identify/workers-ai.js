@@ -12,7 +12,7 @@
 //   3) 라벨에서 읽은 값(이름·도수·숙성·용량)으로 덮어쓰기 (mergeVision)
 import { BRANDS } from '../../public/js/content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from '../../public/js/content/index.js';
-import { STYLE_HINTS, analyzeLabel, extractAttributes, matchBrands, sanePrice, topCategory } from '../../public/js/lib/label.js';
+import { SERVE, STYLE_HINTS, analyzeLabel, extractAttributes, matchBrands, sanePrice, topCategory } from '../../public/js/lib/label.js';
 import { IdentifyError } from './claude.js';
 import { SYSTEM_PROMPT, userText } from './prompt.js';
 import { RESULT_SCHEMA } from './schema.js';
@@ -166,6 +166,16 @@ export function labelEvidence(vision) {
   const name = str(vision.name) || label.replace(/\d+(?:[.,]\d+)?\s*(?:%|ml|cl|l\b)[^\s]*/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
   if (!name) return null;
   return { ...vision, is_alcohol: true, name, category, abv: str(vision.abv, 40) || (abv ? `${abv}%` : ''), confidence: 'low' };
+}
+
+// 마시는 법이 종류마다 거의 같은 술 (와인·사케·전통주는 스타일마다 달라 AI 답을 둠)
+const UNIFORM_SERVE = new Set(['beer', 'soju', 'cocktail', 'whisky', 'brandy', 'vodka', 'gin', 'rum', 'tequila', 'liqueur', 'baijiu']);
+
+/** AI 가 쓴 마시는 법(가끔 "잔: 텁텅" 같은 깨진 말)을 앱 백과의 마시는 법으로. AI 의 팁은 남김 */
+export function withAppServing(result) {
+  const serve = UNIFORM_SERVE.has(result?.category) ? SERVE[result.category] : null;
+  if (!serve) return result;
+  return { ...result, how_to_drink: { temperature: serve.temperature, glass: serve.glass, methods: [...serve.methods], tips: result.how_to_drink?.tips || '' } };
 }
 
 /** 2단계 한국어 설명에 사진에서 읽은 값(이름·도수·숙성·용량·라벨 글자)을 덮어쓰기 */
@@ -353,7 +363,7 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
     if (CATEGORIES.includes(v.category) && v.category !== 'other' && (result.is_alcohol === false || (result.category && result.category !== v.category))) {
       result = genericResult(v) || result;
     }
-    result = sanePrice(mergeVision(result, v), CATEGORY_BY_ID[v.category]?.name);
+    result = withAppServing(sanePrice(mergeVision(result, v), CATEGORY_BY_ID[v.category]?.name));
     return { result, model, usage: { vision: vOut?.usage ?? null, text: korean.usage } };
   }
 
@@ -386,7 +396,8 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
         });
       }
     }
-    return { result: cleanKorean(parseWorkersAiResponse(out), text), model, usage: out?.usage ?? null };
+    const result = cleanKorean(parseWorkersAiResponse(out), text);
+    return { result: result.is_alcohol === false ? result : withAppServing(result), model, usage: out?.usage ?? null };
   }
 
   return identifier;

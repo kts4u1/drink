@@ -388,7 +388,7 @@ export function sanePrice(result, catName = '') {
 }
 
 /** 술 종류별 마시는 법 (백과 내용을 짧게) */
-const SERVE = {
+export const SERVE = {
   red: { temperature: '16~18℃ (냉장고에 15~20분)', glass: '볼이 넓은 레드 와인잔', methods: ['따고 20~30분 두면 부드러워져요', '잔은 1/3 정도만 채우기'] },
   white: { temperature: '8~12℃ (차갑게)', glass: '화이트 와인잔', methods: ['차갑게 해서 바로', '남으면 마개 막아 냉장 2~3일'] },
   sparkling: { temperature: '6~8℃ (아주 차갑게)', glass: '플루트 잔 또는 화이트 와인잔', methods: ['병을 45도로 기울여 천천히 따기', '마시기 직전까지 냉장'] },

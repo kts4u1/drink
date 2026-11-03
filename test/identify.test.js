@@ -293,7 +293,7 @@ test('ensure-kv: wrangler 출력 해석, KV 설정 빼기', () => {
 });
 
 // ---------- Cloudflare Workers AI (무료) ----------
-import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, labelEvidence, repairJson, skeleton, styleKo, visionHint } from '../server/identify/workers-ai.js';
+import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, labelEvidence, repairJson, skeleton, styleKo, visionHint, withAppServing } from '../server/identify/workers-ai.js';
 
 function fakeAi(handler) {
   const calls = [];
@@ -548,4 +548,21 @@ test('Workers AI 사진: "술 아님"이라고 해도 라벨에 도수·술 단�
   assert.equal(r.abv, '4.7%');
   assert.equal(r.confidence, 'low');
   assert.match(ai.calls[1].input.messages[1].content, /Sengur Ultra/);
+});
+
+test('마시는 법: 맥주·위스키 등은 앱 백과 내용으로 (AI 의 깨진 말 대신), 와인은 AI 답 그대로', async () => {
+  const beer = withAppServing({ category: 'beer', how_to_drink: { temperature: '4-6°C', glass: '텁텅', methods: ['차게'], tips: '거품을 살려요' } });
+  assert.match(beer.how_to_drink.glass, /맥주잔/);
+  assert.match(beer.how_to_drink.temperature, /4~7/);
+  assert.equal(beer.how_to_drink.tips, '거품을 살려요');
+  const wine = { category: 'wine', how_to_drink: { temperature: '8~10℃', glass: '화이트 와인잔', methods: [], tips: '' } };
+  assert.deepEqual(withAppServing(wine), wine);
+  // 사진 경로·이름 경로 모두
+  const vision = { is_alcohol: true, name: 'Sengur Ultra', category: 'beer', label_text: 'SENGUR ULTRA LAGER' };
+  const ai = fakeAi((n) => (n === 1 ? { response: JSON.stringify(vision) } : { response: { ...SAMPLE, category: 'beer', how_to_drink: { temperature: '4-6°C', glass: '텁텅', methods: ['차게'], tips: '' }, price: { krw_low: 2000, krw_high: 3000 } } }));
+  const r = (await createWorkersAiIdentifier({ ai }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  assert.match(r.how_to_drink.glass, /맥주잔/);
+  const t2 = fakeAi(() => ({ response: { ...SAMPLE, category: 'whisky', how_to_drink: { temperature: '실온', glass: '튜닉 잔', methods: [], tips: '' } } }));
+  const r2 = (await createWorkersAiIdentifier({ ai: t2 }).identify({ text: '처음 보는 위스키' })).result;
+  assert.doesNotMatch(r2.how_to_drink.glass, /튜닉/);
 });
