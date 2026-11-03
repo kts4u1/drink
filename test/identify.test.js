@@ -293,7 +293,7 @@ test('ensure-kv: wrangler 출력 해석, KV 설정 빼기', () => {
 });
 
 // ---------- Cloudflare Workers AI (무료) ----------
-import { buildWorkersAiInput, createWorkersAiIdentifier, parseWorkersAiResponse, skeleton } from '../server/identify/workers-ai.js';
+import { buildWorkersAiInput, createWorkersAiIdentifier, parseWorkersAiResponse, repairJson, skeleton } from '../server/identify/workers-ai.js';
 
 function fakeAi(handler) {
   const calls = [];
@@ -365,4 +365,25 @@ test('Worker: 기본은 무료 Workers AI, Claude 는 AI_PROVIDER=anthropic 일 
   assert.equal(ai.calls.length, 1, '키가 있어도 유료 Claude 를 부르지 않음');
   const paid = await (await worker.fetch(new Request('https://x/api/health'), { ...env, AI_PROVIDER: 'anthropic' })).json();
   assert.deepEqual([paid.provider, paid.free], ['anthropic', false]);
+});
+
+test('Workers AI: 글자 수 제한에 끊긴 JSON 살리기, 못 살리면 진단 정보', async () => {
+  const full = JSON.stringify({ is_alcohol: true, name_ko: '조니워커 블랙', category: 'whisky', tasting: { nose: '바닐라, "스모키"' }, similar: [{ name: 'a', why: 'b' }] });
+  for (const cut of [45, 75, 100, full.length - 3]) {
+    const r = JSON.parse(repairJson(full.slice(0, cut)));
+    assert.equal(r.name_ko, '조니워커 블랙', `cut ${cut}`);
+  }
+  assert.equal(parseWorkersAiResponse({ response: `결과: ${full.slice(0, 100)}` }).category, 'whisky');
+  assert.throws(
+    () => parseWorkersAiResponse({ response: '모르겠어요', usage: { completion_tokens: 3 } }),
+    (e) => e.code === 'bad_json' && e.detail.head === '모르겠어요' && e.detail.usage.completion_tokens === 3,
+  );
+  // 화면에는 진단 정보가 오고, 실패해도 하루 사용량은 셈 (AI 사용량은 썼으니까)
+  const store = createMemoryStore();
+  const identifier = createWorkersAiIdentifier({ ai: { run: async () => ({ response: '잘 모르겠어요' }) } });
+  const res = await handleIdentify({ body: { text: '발베니' } }, { identifier, store, dailyLimit: 5, now: () => Date.UTC(2026, 10, 3, 3) });
+  assert.equal(res.status, 502);
+  assert.equal(res.body.code, 'bad_json');
+  assert.equal(res.body.detail.head, '잘 모르겠어요');
+  assert.equal(await store.get(`count:${kstDay(Date.UTC(2026, 10, 3, 3))}`), 1);
 });

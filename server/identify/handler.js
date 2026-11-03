@@ -89,17 +89,29 @@ export async function handleIdentify({ body, ip = 'unknown' }, { identifier, sto
     if (used >= dailyLimit) return fail(429, '오늘 사진 인식 사용량을 모두 썼어요. 내일 다시 이용해 주세요.', 'daily_limit');
   }
 
+  // 실패해도 AI 사용량은 쓰니까 부르기 전에 셈
+  try {
+    if (dailyLimit > 0 && store) await store.put(dayKey, used + 1, 2 * 24 * 3600);
+  } catch {
+    /* 저장 실패는 무시 */
+  }
+
   let out;
   try {
     out = await identifier.identify({ images, text });
   } catch (err) {
-    if (err instanceof IdentifyError) return fail(err.status, err.message, err.code);
+    if (err instanceof IdentifyError) {
+      if (err.detail) log(`[identify] ${err.code} ${JSON.stringify(err.detail)}`);
+      const res = fail(err.status, err.message, err.code);
+      // 원인을 찾을 수 있게 짧은 진단 정보 (AI 가 만든 글 일부와 오류 문구만, 비밀 정보 없음)
+      if (err.detail) res.body.detail = err.detail;
+      return res;
+    }
     log(err);
     return fail(500, '서버 오류가 발생했어요.', 'server');
   }
   const result = normalizeResult(out.result);
   try {
-    if (dailyLimit > 0 && store) await store.put(dayKey, used + 1, 2 * 24 * 3600);
     // 술이 아니라고 나온 결과는 다시 찍을 수 있게 저장하지 않음
     if (result.is_alcohol && store) await store.put(key, { result, model: out.model }, CACHE_TTL_SECONDS);
   } catch {

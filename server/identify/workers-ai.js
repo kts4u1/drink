@@ -19,7 +19,9 @@ export function skeleton(schema) {
   return '';
 }
 
-const JSON_GUIDE = `\n\n출력 형식: 아래 키를 모두 가진 JSON 객체 하나만 출력하세요. 설명 문장이나 코드 블록 표시(\`\`\`) 없이 JSON 만 씁니다. 모르는 값은 빈 문자열("")이나 0 으로 둡니다.\n${JSON.stringify(skeleton(RESULT_SCHEMA))}`;
+const JSON_GUIDE = `\n\n출력 형식: 아래 키를 모두 가진 JSON 객체 하나만 출력하세요. 설명 문장이나 코드 블록 표시(\`\`\`) 없이 JSON 만 씁니다. 모르는 값은 빈 문자열("")이나 0 으로 둡니다.
+글은 짧게 씁니다: 각 값은 한두 문장(80자 이내), label_text 는 100자 이내, 목록은 3개까지. 같은 말을 되풀이하지 마세요.
+${JSON.stringify(skeleton(RESULT_SCHEMA))}`;
 
 export function buildWorkersAiInput({ images = [], text = '', withFormat = true }) {
   const prompt = userText({ text, imageCount: images.length });
@@ -38,19 +40,80 @@ export function buildWorkersAiInput({ images = [], text = '', withFormat = true 
   return input;
 }
 
-/** 모델 답에서 JSON 꺼내기 (이미 객체거나, 앞뒤에 글이나 ```json 이 붙은 경우) */
+/**
+ * 글자 수 제한(max_tokens)에 걸려 중간에 끊긴 JSON 을 닫아서 살리기.
+ * 끊긴 마지막 값은 버리고, 열린 따옴표·괄호를 닫음
+ */
+export function repairJson(text) {
+  const stack = [];
+  let inStr = false;
+  let esc = false;
+  let lastSafe = -1; // 마지막으로 값 하나가 끝난 위치
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') {
+      stack.pop();
+      if (!stack.length) return text.slice(0, i + 1);
+    } else if (c === ',') lastSafe = i;
+  }
+  if (lastSafe < 0) return null;
+  // 끊긴 마지막 항목을 버리고 다시 닫기
+  const head = text.slice(0, lastSafe);
+  const closers = [];
+  inStr = false;
+  esc = false;
+  for (const c of head) {
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') closers.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') closers.pop();
+  }
+  return head + closers.reverse().join('');
+}
+
+function badJson(text, out) {
+  const s = String(text ?? '');
+  return Object.assign(new IdentifyError('AI 응답을 읽지 못했어요. 다시 시도해 주세요.', 502, 'bad_json'), {
+    detail: { length: s.length, head: s.slice(0, 160), tail: s.slice(-160), usage: out?.usage ?? null },
+  });
+}
+
+/** 모델 답에서 JSON 꺼내기 (이미 객체거나, 앞뒤에 글이나 ```json 이 붙었거나, 끊긴 경우) */
 export function parseWorkersAiResponse(out) {
   const r = out?.response ?? out?.result?.response ?? out;
   if (r && typeof r === 'object' && !Array.isArray(r)) return r;
   const text = String(r ?? '');
   const start = text.indexOf('{');
+  if (start === -1) throw badJson(text, out);
   const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new IdentifyError('AI 응답을 읽지 못했어요. 다시 시도해 주세요.', 502, 'bad_json');
-  try {
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    throw new IdentifyError('AI 응답을 읽지 못했어요. 다시 시도해 주세요.', 502, 'bad_json');
+  if (end > start) {
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch {
+      /* 아래에서 고쳐 보기 */
+    }
   }
+  const fixed = repairJson(text.slice(start));
+  try {
+    const obj = fixed && JSON.parse(fixed);
+    if (obj && typeof obj === 'object' && (obj.name_ko || obj.is_alcohol === false)) return obj;
+  } catch {
+    /* 못 고침 */
+  }
+  throw badJson(text, out);
 }
 
 const QUOTA = /4006|neuron|allocation|quota|exceeded|daily limit|upgrade to/i;
@@ -82,7 +145,9 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
           out = await run(buildWorkersAiInput({ images, text, withFormat: false }));
         } catch (err2) {
           if (err2 instanceof IdentifyError) throw err2;
-          throw new IdentifyError('무료 AI 가 지금 응답하지 않아요. 기기 안에서 분석할게요.', 502, 'upstream');
+          throw Object.assign(new IdentifyError('무료 AI 가 지금 응답하지 않아요. 기기 안에서 분석할게요.', 502, 'upstream'), {
+            detail: { first: err.message.slice(0, 200), second: err2.message.slice(0, 200) },
+          });
         }
       }
       const result = parseWorkersAiResponse(out);

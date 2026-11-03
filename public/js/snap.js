@@ -192,7 +192,8 @@ async function viaServer({ images, text }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ images, text }),
-    signal: AbortSignal.timeout(120_000),
+    // 무료 AI 가 오래 걸리면 기다리지 않고 기기 안 분석으로 (유료 Claude 는 더 기다림)
+    signal: AbortSignal.timeout(ai?.free ? 45_000 : 120_000),
   });
   let body = null;
   try {
@@ -234,7 +235,7 @@ async function identify({ images = [], text = '', thumb = null, preview = null }
       thumb: shown,
       text,
       steps: server ? AI_STEPS : images.length ? LOCAL_STEPS : ['브랜드 사전에서 찾는 중'],
-      note: server ? '보통 10~30초 걸려요. 창을 닫지 말고 기다려 주세요.' : '휴대폰 안에서 분석해요. 사진은 어디에도 보내지 않아요.',
+      note: server ? `보통 10~30초 걸려요. ${ai?.free ? '45초가 넘으면 휴대폰 안에서 분석해요.' : '창을 닫지 말고 기다려 주세요.'}` : '휴대폰 안에서 분석해요. 사진은 어디에도 보내지 않아요.',
     }),
   );
   let timer = null;
@@ -260,7 +261,12 @@ async function identify({ images = [], text = '', thumb = null, preview = null }
         if (!FALLBACK_CODES.has(code)) throw err;
         clearInterval(timer);
         if (sheetIsCurrent(t)) t = openSheet(loadingHtml({ thumb: shown, text, steps: images.length ? LOCAL_STEPS : ['브랜드 사전에서 찾는 중'], note: '무료 AI를 지금 쓸 수 없어 휴대폰 안에서 분석해요.' }));
-        notice = code === 'free_quota' || code === 'daily_limit' ? '오늘 무료 AI 사용량이 끝나서 기기 안에서 분석했어요.' : '무료 AI가 응답하지 않아 기기 안에서 분석했어요.';
+        notice =
+          code === 'free_quota' || code === 'daily_limit'
+            ? '오늘 무료 AI 사용량이 끝나서 기기 안에서 분석했어요.'
+            : err.name === 'TimeoutError'
+              ? '무료 AI가 너무 오래 걸려서 기기 안에서 분석했어요.'
+              : '무료 AI가 응답하지 않아 기기 안에서 분석했어요.';
         result = await viaDevice({ images, text, t });
         method = images.length ? 'local' : 'brand';
       }
