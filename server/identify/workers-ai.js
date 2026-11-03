@@ -7,7 +7,12 @@
 // 사진은 두 단계로 알아봐요. 실제로 시험해 보니 이 모델은 사진을 붙이면 라벨은 정확히 읽지만
 // 한국어 글자가 깨져서("위스키" → "위하벗") 나왔고, 사진 없이 이름만 물으면 한국어가 멀쩡했어요.
 //   1) 사진 → 영어로 제품 이름·라벨 글자·도수만 짧게 (buildVisionInput)
-//   2) 그 이름 → 한국어 설명 (이름 질문과 같은 방식) 후 라벨에서 읽은 값으로 덮어쓰기 (mergeVision)
+//   2) 그 이름이 앱의 브랜드 사전에 있으면 사전으로 한국어 설명 (정확하고 빠르고 AI 사용량도 안 씀)
+//      없으면 그 이름 → 한국어 설명 (이름 질문과 같은 방식)
+//   3) 라벨에서 읽은 값(이름·도수·숙성·용량)으로 덮어쓰기 (mergeVision)
+import { BRANDS } from '../../public/js/content/brands.js';
+import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from '../../public/js/content/index.js';
+import { analyzeLabel, extractAttributes, matchBrands } from '../../public/js/lib/label.js';
 import { IdentifyError } from './claude.js';
 import { SYSTEM_PROMPT, userText } from './prompt.js';
 import { RESULT_SCHEMA } from './schema.js';
@@ -55,6 +60,32 @@ export function buildVisionInput({ images = [], text = '' }) {
 
 const str = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : typeof v === 'number' ? String(v) : '');
 const RANK = { high: 3, medium: 2, low: 1 };
+
+// 한국어가 아닌 글자(키릴 문자 등)나 깨진 글자가 섞여 나오는 경우가 있어 지움
+const JUNK = /[\uD800-\uDFFF\u0400-\u04FF\u0E00-\u0E7F\uFFFD]/g;
+
+/** 결과 글에서 깨진 글자 지우기. 이름이 깨졌으면 라벨의 원어 이름을 씀 */
+export function cleanKorean(result, fallbackName = '') {
+  const walk = (v) => (typeof v === 'string' ? v.replace(JUNK, '') : Array.isArray(v) ? v.map(walk) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)])) : v);
+  const broken = typeof result?.name_ko === 'string' && JUNK.test(result.name_ko);
+  JUNK.lastIndex = 0;
+  const out = walk(result);
+  if (broken && fallbackName) out.name_ko = fallbackName;
+  return out;
+}
+
+/**
+ * 사진에서 읽은 이름이 브랜드 사전에 있으면 사전으로 만든 설명 (없거나 종류가 다르면 null)
+ */
+export function dictionaryResult(vision) {
+  const text = [vision.name, vision.producer, vision.style, vision.label_text].map((v) => str(v, 200)).join(' ');
+  const hit = matchBrands(text, BRANDS, extractAttributes(text).votes)[0];
+  if (!hit || hit.score < 10) return null;
+  if (CATEGORIES.includes(vision.category) && vision.category !== 'other' && hit.brand.cat !== vision.category) return null;
+  const local = analyzeLabel({ text, source: 'text' }, { brands: BRANDS, products: PRODUCTS, categories: CATEGORY_BY_ID, buy: BUY_BY_CATEGORY });
+  if (!local.is_alcohol) return null;
+  return { ...local, confidence_note: `앱의 브랜드 사전(${hit.brand.ko})으로 설명했어요. 세부 제품(숙성 연수·라인)은 라벨에서 한 번 더 확인하세요.` };
+}
 
 /** 2단계 한국어 설명에 사진에서 읽은 값(이름·도수·숙성·용량·라벨 글자)을 덮어쓰기 */
 export function mergeVision(korean, vision) {
@@ -213,10 +244,14 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
         usage: vOut?.usage ?? null,
       };
     }
-    // 이름으로 한국어 설명 받기 (이름에 숙성 연수·빈티지가 없으면 붙여서)
+    const v = { ...vision, name: base };
+    // 브랜드 사전에 있으면 사전으로 (AI 를 한 번 덜 부름)
+    const dict = dictionaryResult(v);
+    if (dict) return { result: mergeVision(dict, v), model, usage: vOut?.usage ?? null, source: 'dictionary' };
+    // 없으면 이름으로 한국어 설명 받기 (이름에 숙성 연수·빈티지가 없으면 붙여서)
     const age = str(vision.age_or_vintage, 40);
     const korean = await identifyText(age && !base.includes(age) ? `${base} ${age}` : base);
-    return { result: mergeVision(korean.result, { ...vision, name: base }), model, usage: { vision: vOut?.usage ?? null, text: korean.usage } };
+    return { result: mergeVision(cleanKorean(korean.result, base), v), model, usage: { vision: vOut?.usage ?? null, text: korean.usage } };
   }
 
   function parseVision(out) {
@@ -248,7 +283,7 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
         });
       }
     }
-    return { result: parseWorkersAiResponse(out), model, usage: out?.usage ?? null };
+    return { result: cleanKorean(parseWorkersAiResponse(out), text), model, usage: out?.usage ?? null };
   }
 
   return identifier;

@@ -270,7 +270,7 @@ test('Worker: CORS·허용 주소·분당 제한 바인딩·KV', async (t) => {
   assert.equal(ok.headers.get('Access-Control-Allow-Origin'), 'https://kts4u1.github.io');
   assert.equal((await ok.json()).result.category, 'whisky');
   assert.equal(limiterCalls, 1);
-  assert.ok([...kv.map.keys()].some((k) => k.startsWith('v1:t:')), 'KV 에 결과 저장');
+  assert.ok([...kv.map.keys()].some((k) => k.startsWith('v2:t:')), 'KV 에 결과 저장');
 
   assert.equal((await post('https://evil.example')).status, 403);
   assert.equal((await post(null)).status, 403);
@@ -293,7 +293,7 @@ test('ensure-kv: wrangler 출력 해석, KV 설정 빼기', () => {
 });
 
 // ---------- Cloudflare Workers AI (무료) ----------
-import { buildVisionInput, buildWorkersAiInput, createWorkersAiIdentifier, mergeVision, parseWorkersAiResponse, repairJson, skeleton } from '../server/identify/workers-ai.js';
+import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, repairJson, skeleton } from '../server/identify/workers-ai.js';
 
 function fakeAi(handler) {
   const calls = [];
@@ -388,8 +388,33 @@ test('Workers AI: 글자 수 제한에 끊긴 JSON 살리기, 못 살리면 진�
   assert.equal(await store.get(`count:${kstDay(Date.UTC(2026, 10, 3, 3))}`), 1);
 });
 
-test('Workers AI 사진: 영어로 이름 읽기 → 그 이름으로 한국어 설명, 라벨 값으로 덮어쓰기', async () => {
+test('Workers AI 사진: 브랜드 사전에 있으면 사전으로 (AI 한 번만)', async () => {
   const vision = { is_alcohol: true, name: 'The Balvenie DoubleWood 12 Year Old', producer: 'The Balvenie', category: 'whisky', age_or_vintage: '12', abv: '40%', volume: '700ml', label_text: 'THE BALVENIE DOUBLEWOOD AGED 12 YEARS 40% vol', confidence: 'high' };
+  const ai = fakeAi(() => ({ response: JSON.stringify(vision) }));
+  const r = await createWorkersAiIdentifier({ ai }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] });
+  assert.equal(ai.calls.length, 1);
+  assert.match(r.result.name_ko, /발베니/);
+  assert.equal(r.result.name_original, vision.name);
+  assert.equal(r.result.abv, '40%');
+  assert.match(r.result.confidence_note, /브랜드 사전/);
+  assert.ok(r.result.price.krw_low > 0);
+  // 종류가 다르면 사전을 쓰지 않음 (와인 라벨의 "Terra" 를 맥주 테라로)
+  assert.equal(dictionaryResult({ name: 'Terra Alta Garnacha', category: 'wine' }), null);
+  assert.equal(dictionaryResult({ name: 'Some Unknown Craft Gin', category: 'gin' }), null);
+  assert.match(dictionaryResult({ name: 'Chamisul Fresh', producer: 'HiteJinro', category: 'soju' }).name_ko, /참이슬/);
+});
+
+test('Workers AI: 깨진 글자 지우기', () => {
+  const r = cleanKorean({ name_ko: '라프로아йг 10년', summary: '스\udc0c모키', similar: [{ name: 'a\u0439b' }], sweetness: 3 }, 'Laphroaig 10');
+  assert.equal(r.name_ko, 'Laphroaig 10');
+  assert.equal(r.summary, '스모키');
+  assert.equal(r.similar[0].name, 'ab');
+  assert.equal(r.sweetness, 3);
+  assert.equal(cleanKorean({ name_ko: '발베니' }, 'X').name_ko, '발베니');
+});
+
+test('Workers AI 사진: 사전에 없으면 영어로 읽은 이름 → 한국어 설명, 라벨 값으로 덮어쓰기', async () => {
+  const vision = { is_alcohol: true, name: 'Chateau Obscur Rouge Reserve', producer: 'Chateau Obscur', category: 'wine', age_or_vintage: '2019', abv: '13.5%', volume: '750ml', label_text: 'CHATEAU OBSCUR ROUGE RESERVE 2019 13.5% vol', confidence: 'high' };
   const ai = fakeAi((n, model, input) => (n === 1 ? { response: 'Sure! ' + JSON.stringify(vision) } : { response: { ...SAMPLE, abv: '43%', confidence: 'medium' } }));
   const r = await createWorkersAiIdentifier({ ai }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] });
   assert.equal(ai.calls.length, 2);
@@ -399,16 +424,16 @@ test('Workers AI 사진: 영어로 이름 읽기 → 그 이름으로 한국어 
   assert.match(first.messages[0].content, /English/);
   assert.ok(first.max_tokens <= 600);
   assert.equal(first.response_format, undefined);
-  // 2단계: 사진 없이 이름으로 (한국어가 깨지지 않게)
+  // 2단계: 사진 없이 이름으로 (한국어가 깨지지 않게), 빈티지를 붙여서
   const second = ai.calls[1].input;
   assert.equal(typeof second.messages[1].content, 'string');
-  assert.match(second.messages[1].content, /The Balvenie DoubleWood 12 Year Old/);
+  assert.match(second.messages[1].content, /Chateau Obscur Rouge Reserve 2019/);
   // 라벨에서 읽은 값이 이기고, 판단 정도는 더 낮은 쪽
   assert.equal(r.result.name_ko, '발베니 12년 더블우드');
-  assert.equal(r.result.abv, '40%');
+  assert.equal(r.result.abv, '13.5%');
   assert.equal(r.result.label_text, vision.label_text);
   assert.equal(r.result.confidence, 'medium');
-  assert.match(r.result.confidence_note, /The Balvenie DoubleWood/);
+  assert.match(r.result.confidence_note, /Chateau Obscur/);
 
   // 술이 아니면 2단계 없이 끝
   const no = fakeAi(() => ({ response: JSON.stringify({ is_alcohol: false, name: '', why: 'a cat' }) }));
@@ -420,8 +445,9 @@ test('Workers AI 사진: 영어로 이름 읽기 → 그 이름으로 한국어 
   // 이름 뒤에 숙성 연수가 없으면 붙여서 묻기
   const v2 = buildVisionInput({ images: [{ mediaType: 'image/png', data: 'B' }], text: '선물 받음' });
   assert.match(v2.messages[1].content[1].text, /선물 받음/);
-  const ai3 = fakeAi((n) => (n === 1 ? { response: JSON.stringify({ is_alcohol: true, name: 'Chateau Talbot', age_or_vintage: '2015', category: 'wine' }) } : { response: SAMPLE }));
+  const ai3 = fakeAi((n) => (n === 1 ? { response: JSON.stringify({ is_alcohol: true, name: 'Obscure Valley Pinot 2015', age_or_vintage: '2015', category: 'wine' }) } : { response: SAMPLE }));
   await createWorkersAiIdentifier({ ai: ai3 }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] });
-  assert.match(ai3.calls[1].input.messages[1].content, /Chateau Talbot 2015/);
+  assert.match(ai3.calls[1].input.messages[1].content, /Obscure Valley Pinot 2015/);
+  assert.doesNotMatch(ai3.calls[1].input.messages[1].content, /2015 2015/);
   assert.equal(mergeVision({ category: 'wine', confidence: 'high' }, { name: 'X', category: 'nope', confidence: 'low' }).category, 'wine');
 });

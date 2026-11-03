@@ -193,7 +193,7 @@ async function viaServer({ images, text }) {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ images, text }),
     // 무료 AI 가 오래 걸리면 기다리지 않고 기기 안 분석으로 (유료 Claude 는 더 기다림)
-    signal: AbortSignal.timeout(ai?.free ? 45_000 : 120_000),
+    signal: AbortSignal.timeout(ai?.free ? 60_000 : 120_000),
   });
   let body = null;
   try {
@@ -235,7 +235,7 @@ async function identify({ images = [], text = '', thumb = null, preview = null }
       thumb: shown,
       text,
       steps: server ? AI_STEPS : images.length ? LOCAL_STEPS : ['브랜드 사전에서 찾는 중'],
-      note: server ? `보통 10~30초 걸려요. ${ai?.free ? '45초가 넘으면 휴대폰 안에서 분석해요.' : '창을 닫지 말고 기다려 주세요.'}` : '휴대폰 안에서 분석해요. 사진은 어디에도 보내지 않아요.',
+      note: server ? `보통 10~30초 걸려요. ${ai?.free ? '1분이 넘으면 휴대폰 안에서 분석해요.' : '창을 닫지 말고 기다려 주세요.'}` : '휴대폰 안에서 분석해요. 사진은 어디에도 보내지 않아요.',
     }),
   );
   let timer = null;
