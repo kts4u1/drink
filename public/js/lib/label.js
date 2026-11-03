@@ -19,6 +19,8 @@ export function prepText(text) {
     .replace(/샤또/g, '샤토')
     .replace(/꼬냑/g, '코냑')
     .replace(/칼루아/g, '깔루아')
+    // 여러 제품에 같이 찍히는 회사 이름은 브랜드로 보지 않음 ("하이트진로"의 하이트·진로)
+    .replace(/하이트\s*진로|hite\s*jinro/g, ' ')
     .replace(/[^a-z0-9가-힣぀-ヿ一-鿿%.,]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -106,6 +108,7 @@ export const STYLE_HINTS = [
   { re: /shochu|焼酎/, cat: 'sake', style: '쇼추' },
   { re: /umeshu|梅酒|매실주/, cat: 'sake', style: '우메슈(매실주)' },
   { re: /\bbeer\b|biere|\bbier\b|cerveza|맥주|ビール/, cat: 'beer', style: '' },
+  { re: /발포주|happoshu|発泡酒/, cat: 'beer', style: '발포주' },
   { re: /\blager\b|라거/, cat: 'beer', style: '라거' },
   { re: /pilsner|\bpils\b|필스너/, cat: 'beer', style: '필스너' },
   { re: /\bipa\b|india\s*pale/, cat: 'beer', style: 'IPA' },
@@ -325,6 +328,8 @@ export function matchBrands(rawText, brands, votes = null) {
       // 글자 속 종류 단서와 브랜드 종류가 다르면 점수를 깎음 (와인 라벨의 "terra" 를 맥주로 오해하지 않게)
       const top = votes ? topCategory(votes) : null;
       if (top && top !== brand.cat && (votes[top] || 0) >= 2 && !(votes[brand.cat] > 0)) best *= 0.4;
+      // 같은 종류 단서가 있으면 조금 올림 ("청하" + "청주", "한맥" + "맥주" 처럼 두 글자 브랜드도 사진에서 알아보게)
+      else if (votes?.[brand.cat] > 0) best *= 1.25;
       hits.push({ brand, score: best, matched });
     }
   }
@@ -340,7 +345,8 @@ const TIER_RANGES = {
   wine: { 1: [8000, 25000], 2: [25000, 60000], 3: [60000, 150000], 4: [200000, 1500000] },
   sake: { 1: [10000, 30000], 2: [30000, 70000], 3: [70000, 150000], 4: [150000, 500000] },
   default: { 1: [10000, 35000], 2: [35000, 70000], 3: [70000, 150000], 4: [150000, 500000] },
-  beer: { 1: [1800, 4500] },
+  beer: { 1: [1800, 4500], 2: [4500, 12000] }, // 2 = 트라피스트 등 수입 고급 맥주 (330ml)
+  cocktail: { 1: [2000, 5000], 2: [5000, 15000] }, // 캔 하이볼·과일 RTD
   soju: { 1: [1200, 2000], 2: [10000, 30000] },
   traditional: { 1: [1500, 20000], 2: [20000, 60000], 3: [60000, 150000] },
 };
@@ -600,6 +606,9 @@ export function searchBrands(brands, query, limit = 6) {
       else if (nn.includes(qc) && qc.length >= 2) s = Math.max(s, 40);
       else if (qc.length >= 5 && editDistance(nn, qc, 2) <= 1) s = Math.max(s, 30);
     }
+    // 이름에 없으면 스타일·원산지로 ("코냑", "IPA", "칠레" → 그 종류의 브랜드들)
+    if (!s && prepName(b.style).replace(/\s/g, '').includes(qc)) s = 20;
+    else if (!s && prepName(b.origin).replace(/\s/g, '').includes(qc)) s = 15;
     if (s) scored.push({ b, s });
   }
   return scored.sort((x, y) => y.s - x.s).slice(0, limit).map((x) => x.b);

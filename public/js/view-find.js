@@ -104,6 +104,8 @@ export function initFind() {
   for (const id of ['findSearch', 'findPopular', 'findCats', 'findSort', 'findAsk', 'findRelated', 'findSummary', 'findList', 'findMore']) {
     els[id.replace('find', '').toLowerCase()] = document.getElementById(id);
   }
+  const count = document.getElementById('findBrandCount');
+  if (count) count.textContent = `대표 제품 + 브랜드 사전 ${BRANDS.length}곳`;
   els.popular.innerHTML = POPULAR.map((q) => `<button type="button" class="chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
   const save = () => storage.set('findPrefs', prefs);
 

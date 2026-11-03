@@ -10,7 +10,11 @@ const ctx = { brands: BRANDS, products: PRODUCTS, categories: CATEGORY_BY_ID, bu
 const photo = (text, extra = {}) => analyzeLabel({ text, source: 'photo', ...extra }, ctx);
 
 test('브랜드 사전: 형식과 중복', () => {
-  assert.ok(BRANDS.length >= 250, `브랜드 ${BRANDS.length}개`);
+  assert.ok(BRANDS.length >= 600, `브랜드 ${BRANDS.length}개`);
+  // 종류마다 고르게 (적은 종류가 없게)
+  const per = {};
+  for (const b of BRANDS) per[b.cat] = (per[b.cat] || 0) + 1;
+  for (const cat of ['whisky', 'wine', 'beer', 'brandy', 'vodka', 'gin', 'rum', 'tequila', 'liqueur', 'sake', 'traditional']) assert.ok(per[cat] >= 15, `${cat} ${per[cat]}개`);
   const seen = new Map();
   for (const b of BRANDS) {
     assert.ok(b.ko && b.names.length && b.desc && b.origin, `${b.ko} 필수 항목`);
@@ -149,4 +153,29 @@ test('validBarcode: 체크 숫자', () => {
   assert.equal(validBarcode('96385074'), true); // EAN-8
   assert.equal(validBarcode('036000291452'), true); // UPC-A
   assert.equal(validBarcode('12345'), false);
+});
+
+test('두 글자 한글 브랜드는 같은 종류 단서가 있으면 사진에서도 알아봄, 회사 이름은 무시', () => {
+  assert.match(photo('청하 청주 롯데칠성음료').name_ko, /청하/);
+  assert.match(photo('필굿 발포주 오비맥주').name_ko, /필굿/);
+  // "하이트진로"는 회사 이름이라 하이트(맥주)·진로(소주)로 보지 않음
+  assert.match(photo('제품명 참이슬 후레쉬 희석식소주 하이트진로(주)').name_ko, /참이슬/);
+  assert.match(photo('진로 소주 하이트진로').name_ko, /^진로/);
+  assert.match(photo('산사춘 약주 배상면주가').name_ko, /산사춘/);
+  // 새로 넣은 브랜드
+  assert.match(photo('CHATEAU LYNCH BAGES PAUILLAC GRAND CRU CLASSE 2016').name_ko, /린치 바주/);
+  assert.match(photo('WESTMALLE TRAPPIST TRIPEL').name_ko, /베스트말레/);
+  assert.match(photo('ST-REMY XO FRENCH BRANDY').name_ko, /생 레미/);
+  assert.match(photo('REMY MARTIN VSOP FINE CHAMPAGNE COGNAC').name_ko, /레미 마르탱/);
+  // 키안티 클라시코의 검은 수탉(Gallo Nero)을 미국 갤로 와인으로 보지 않음
+  assert.ok(!matchBrands('CHIANTI CLASSICO GALLO NERO VINO ROSSO', BRANDS, {}).some((h) => h.brand.ko === '갤로' && h.score >= 6));
+});
+
+test('searchBrands: 이름에 없으면 스타일·원산지로', () => {
+  const cognac = searchBrands(BRANDS, '코냑');
+  assert.ok(cognac.length >= 4 && cognac.every((b) => b.cat === 'brandy'), cognac.map((b) => b.ko).join(','));
+  assert.ok(searchBrands(BRANDS, 'ipa').every((b) => b.cat === 'beer'));
+  assert.ok(searchBrands(BRANDS, '칠레').every((b) => b.cat === 'wine'));
+  // 이름이 맞으면 이름이 먼저
+  assert.equal(searchBrands(BRANDS, '발베니')[0].ko, '발베니');
 });
