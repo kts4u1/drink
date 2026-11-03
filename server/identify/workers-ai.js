@@ -12,7 +12,7 @@
 //   3) 라벨에서 읽은 값(이름·도수·숙성·용량)으로 덮어쓰기 (mergeVision)
 import { BRANDS } from '../../public/js/content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from '../../public/js/content/index.js';
-import { STYLE_HINTS, analyzeLabel, extractAttributes, matchBrands, sanePrice } from '../../public/js/lib/label.js';
+import { STYLE_HINTS, analyzeLabel, extractAttributes, matchBrands, sanePrice, topCategory } from '../../public/js/lib/label.js';
 import { IdentifyError } from './claude.js';
 import { SYSTEM_PROMPT, userText } from './prompt.js';
 import { RESULT_SCHEMA } from './schema.js';
@@ -146,6 +146,26 @@ export function genericResult(v) {
     confidence: 'medium',
     confidence_note: `이 제품의 자세한 정보는 없어서 ${kind}의 일반적인 설명과 가격대를 보여 드려요.`,
   };
+}
+
+/**
+ * AI 가 "술 아님"이라고 했지만 라벨 글자에 술 단서(도수 "4.7%", lager·wine·vol 등)가 있으면 술로 봄.
+ * 종류는 단서로, 단서 없이 도수만 있으면 8% 이하는 맥주로 짐작. 단서가 없으면 null
+ */
+export function labelEvidence(vision) {
+  const label = str(vision.label_text, 200);
+  const text = [label, str(vision.style), str(vision.name)].join(' ');
+  const attrs = extractAttributes(text);
+  const voted = topCategory(attrs.votes);
+  const abv = attrs.abv && attrs.abv >= 0.5 && attrs.abv <= 75 ? attrs.abv : null;
+  if (!voted && !abv) return null;
+  const given = CATEGORIES.includes(vision.category) && vision.category !== 'other' ? vision.category : null;
+  const category = given || voted || (abv <= 8 ? 'beer' : null);
+  if (!category) return null;
+  // 이름: AI 가 준 이름, 없으면 라벨 글자에서 도수·용량을 뺀 앞부분
+  const name = str(vision.name) || label.replace(/\d+(?:[.,]\d+)?\s*(?:%|ml|cl|l\b)[^\s]*/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!name) return null;
+  return { ...vision, is_alcohol: true, name, category, abv: str(vision.abv, 40) || (abv ? `${abv}%` : ''), confidence: 'low' };
 }
 
 /** 2단계 한국어 설명에 사진에서 읽은 값(이름·도수·숙성·용량·라벨 글자)을 덮어쓰기 */
@@ -292,7 +312,7 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
       if (err instanceof IdentifyError) throw err;
       throw Object.assign(new IdentifyError('무료 AI 가 지금 응답하지 않아요. 기기 안에서 분석할게요.', 502, 'upstream'), { detail: { vision: err.message.slice(0, 200) } });
     }
-    const vision = parseVision(vOut);
+    let vision = parseVision(vOut);
     const label = str(vision.label_text, 150);
     let base = str(vision.name) || str(vision.name_original);
     // 이름 칸은 비웠지만 라벨 글자와 술 종류는 읽었으면 라벨 글자를 이름으로 (흐린 사진에서 생김)
@@ -301,6 +321,14 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
       // 술이 아니라고 했어도 라벨 글자가 브랜드 사전에 있으면 술로 봄
       const dict = label ? dictionaryResult({ name: label, label_text: label }) : null;
       if (dict) return { result: mergeVision(dict, { ...vision, name: '', category: dict.category }), model, usage: vOut?.usage ?? null, source: 'dictionary' };
+      // 라벨에 도수·술 단서가 있으면 술로 보고 계속
+      const evidence = label ? labelEvidence(vision) : null;
+      if (evidence) {
+        vision = evidence;
+        base = evidence.name;
+      }
+    }
+    if (vision.is_alcohol === false || !base) {
       return {
         result: {
           is_alcohol: false,

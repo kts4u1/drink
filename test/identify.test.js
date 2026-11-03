@@ -293,7 +293,7 @@ test('ensure-kv: wrangler 출력 해석, KV 설정 빼기', () => {
 });
 
 // ---------- Cloudflare Workers AI (무료) ----------
-import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, repairJson, skeleton, styleKo, visionHint } from '../server/identify/workers-ai.js';
+import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, labelEvidence, repairJson, skeleton, styleKo, visionHint } from '../server/identify/workers-ai.js';
 
 function fakeAi(handler) {
   const calls = [];
@@ -529,4 +529,23 @@ test('이름 질문: 모르는 이름은 지어내지 말라고 함, 사진 경�
   assert.equal(r.name_ko, 'Sengur Ultra');
   assert.match(r.how_to_drink.glass, /맥주/);
   assert.match(ai.calls[1].input.messages[1].content, /위 지시보다 우선/);
+});
+
+test('Workers AI 사진: "술 아님"이라고 해도 라벨에 도수·술 단서가 있으면 술로', async () => {
+  // 실제로 있었던 일: 흐린 맥주 캔에서 "Sengur Ultra 4.7%"까지 읽고도 is_alcohol false
+  assert.deepEqual(
+    (({ name, category, abv, confidence }) => ({ name, category, abv, confidence }))(labelEvidence({ is_alcohol: false, label_text: 'Sengur Ultra 4.7%' })),
+    { name: 'Sengur Ultra', category: 'beer', abv: '4.7%', confidence: 'low' },
+  );
+  assert.equal(labelEvidence({ is_alcohol: false, label_text: 'EXTRA SMOOTH LAGER' }).category, 'beer');
+  assert.equal(labelEvidence({ is_alcohol: false, label_text: 'Chateau Obscur Bordeaux 13.5% vol' }).category, 'wine');
+  assert.equal(labelEvidence({ is_alcohol: false, label_text: 'Coca-Cola Zero 355ml' }), null);
+  assert.equal(labelEvidence({ is_alcohol: false, label_text: 'Mystery Spirit 40%' }), null); // 도수만으로는 종류를 모름
+  const ai = fakeAi((n) => (n === 1 ? { response: JSON.stringify({ is_alcohol: false, name: '', label_text: 'Sengur Ultra 4.7%', why: 'not sure' }) } : { response: { ...SAMPLE, category: 'beer', name_ko: '셍구르 울트라', style: 'lager', price: { krw_low: 2500, krw_high: 4000 } } }));
+  const r = (await createWorkersAiIdentifier({ ai }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  assert.equal(r.is_alcohol, true);
+  assert.equal(r.category, 'beer');
+  assert.equal(r.abv, '4.7%');
+  assert.equal(r.confidence, 'low');
+  assert.match(ai.calls[1].input.messages[1].content, /Sengur Ultra/);
 });
