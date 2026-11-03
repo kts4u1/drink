@@ -60,6 +60,8 @@ export function buildVisionInput({ images = [], text = '' }) {
 
 const str = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : typeof v === 'number' ? String(v) : '');
 const RANK = { high: 3, medium: 2, low: 1 };
+// 숫자만 읽었으면 단위 붙이기 ("40" → "40%", "700" → "700ml")
+const withUnit = (v, unit) => (/^\d+(\.\d+)?$/.test(v) ? `${v}${unit}` : v);
 
 // 한국어가 아닌 글자(키릴 문자 등)나 깨진 글자가 섞여 나오는 경우가 있어 지움
 const JUNK = /[\uD800-\uDFFF\u0400-\u04FF\u0E00-\u0E7F\uFFFD]/g;
@@ -99,8 +101,8 @@ export function mergeVision(korean, vision) {
     producer: str(vision.producer) || korean.producer,
     category: CATEGORIES.includes(vision.category) ? vision.category : korean.category,
     age_or_vintage: str(vision.age_or_vintage, 40) || korean.age_or_vintage,
-    abv: str(vision.abv, 40) || korean.abv,
-    volume: str(vision.volume, 40) || korean.volume,
+    abv: withUnit(str(vision.abv, 40), '%') || korean.abv,
+    volume: withUnit(str(vision.volume, 40), 'ml') || korean.volume,
     confidence: conf,
     confidence_note: [name ? `사진의 라벨에서 "${name}"(으)로 읽었어요.` : '', korean.confidence_note].filter(Boolean).join(' '),
   };

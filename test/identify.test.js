@@ -450,4 +450,8 @@ test('Workers AI 사진: 사전에 없으면 영어로 읽은 이름 → 한국�
   assert.match(ai3.calls[1].input.messages[1].content, /Obscure Valley Pinot 2015/);
   assert.doesNotMatch(ai3.calls[1].input.messages[1].content, /2015 2015/);
   assert.equal(mergeVision({ category: 'wine', confidence: 'high' }, { name: 'X', category: 'nope', confidence: 'low' }).category, 'wine');
+  const units = mergeVision({ abv: '', volume: '' }, { name: 'X', abv: '40', volume: '700' });
+  assert.equal(units.abv, '40%');
+  assert.equal(units.volume, '700ml');
+  assert.equal(mergeVision({}, { name: 'X', abv: '43% vol' }).abv, '43% vol');
 });
