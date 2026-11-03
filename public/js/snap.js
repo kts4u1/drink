@@ -7,7 +7,7 @@ import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from './content/index.js';
 import { CONFIDENCE_LABELS, cleanQueryText, displayName, normalizeResult, priceQuery } from './lib/identify.js';
 import { searchBrands } from './lib/label.js';
 import { norm, searchProducts } from './lib/search.js';
-import { OCR_DOWNLOAD_MB, analyzeLocally, analyzeName } from './local-vision.js';
+import { OCR_DOWNLOAD_MB, analyzeLocally, analyzeName, dictionaryLookup } from './local-vision.js';
 import { mapSearchLinks } from './place.js';
 import { channelCard } from './render.js';
 import { SHOP_WORDS, fillProductKca, fillProductNearby, openProduct, openSheet, sheetIsCurrent } from './sheets.js';
@@ -225,11 +225,11 @@ async function viaDevice({ images, text, t }) {
   });
 }
 
-async function identify({ images = [], text = '', thumb = null, preview = null }) {
+async function identify({ images = [], text = '', thumb = null, preview = null, forceAi = false }) {
   if (busy) return;
   busy = true;
   const shown = preview || thumb;
-  const server = useAi();
+  const server = forceAi ? Boolean(ai) : useAi();
   let t = openSheet(
     loadingHtml({
       thumb: shown,
@@ -283,7 +283,7 @@ async function identify({ images = [], text = '', thumb = null, preview = null }
   } catch (err) {
     const message = err.name === 'TimeoutError' ? '시간이 너무 오래 걸려요. 잠시 후 다시 시도해 주세요.' : err.name === 'TypeError' ? '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.' : err.message;
     openSheet(errorHtml(message, true));
-    lastRequest = { images, text, thumb, preview };
+    lastRequest = { images, text, thumb, preview, forceAi };
   } finally {
     clearInterval(timer);
     busy = false;
@@ -292,11 +292,20 @@ async function identify({ images = [], text = '', thumb = null, preview = null }
 
 let lastRequest = null;
 
-/** 이름으로 알아보기 (무료 AI 가 있으면 AI, 없으면 브랜드 사전·백과) */
+/**
+ * 이름으로 알아보기: 브랜드 사전에 있으면 사전으로 바로 (정확하고 AI 사용량을 안 씀),
+ * 없으면 무료 AI (없으면 백과·사전에서 비슷한 것)
+ */
 export function askText(text) {
   const q = cleanQueryText(text);
   if (q.length < 2) {
     toast('술 이름을 두 글자 이상 적어 주세요.');
+    return;
+  }
+  const dict = dictionaryLookup(q);
+  if (dict) {
+    saveHistory({ result: dict, thumb: null, text: q, model: null, method: 'brand' });
+    renderResult(dict, { text: q, method: 'brand' });
     return;
   }
   identify({ text: q });
@@ -458,6 +467,7 @@ function renderResult(result, { thumb, text, model: usedModel, cached, method = 
       ${result.storage ? `<div class="sheet-section"><h3>보관</h3><p>${escapeHtml(result.storage)}</p></div>` : ''}
       ${result.fun_fact ? `<div class="sheet-section"><h3>알고 마시면 더 맛있는 이야기</h3><p>${escapeHtml(result.fun_fact)}</p></div>` : ''}
       <div class="link-grid" style="margin-top:18px">
+        ${method === 'brand' && text && useAi() ? `<button type="button" data-ask-ai="${escapeHtml(text)}">🤖 무료 AI에게 더 자세히 묻기</button>` : ''}
         <button type="button" data-snap-camera>📷 다른 술 찍기</button>
         ${cat ? `<a href="#guide/${cat.id}">${cat.emoji} ${escapeHtml(cat.name)} 알아보기</a>` : `<button type="button" data-share data-title="${escapeHtml(name)}" data-text="${escapeHtml(`${name} - ${result.summary}`)}" data-hash="#find">${ICON.share}공유</button>`}
       </div>
@@ -569,6 +579,11 @@ export function initSnap() {
 
   // 앱 어디서나: data-ask="이름" 은 알아보기, data-brand="이름" 은 브랜드 사전 바로 보기, 결과 화면의 버튼들
   document.addEventListener('click', (e) => {
+    const askAi = e.target.closest('[data-ask-ai]');
+    if (askAi) {
+      identify({ text: askAi.dataset.askAi, forceAi: true });
+      return;
+    }
     const ask = e.target.closest('[data-ask]');
     if (ask) {
       askText(ask.dataset.ask);

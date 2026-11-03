@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BRANDS } from '../public/js/content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from '../public/js/content/index.js';
-import { analyzeLabel, categoryFromOff, editDistance, extractAttributes, matchBrands, nearHangul, prepText, searchBrands } from '../public/js/lib/label.js';
-import { analyzeName, validBarcode } from '../public/js/local-vision.js';
+import { analyzeLabel, categoryFromOff, editDistance, extractAttributes, matchBrands, nearHangul, prepText, priceTier, searchBrands } from '../public/js/lib/label.js';
+import { analyzeName, dictionaryLookup, validBarcode } from '../public/js/local-vision.js';
 
 const ctx = { brands: BRANDS, products: PRODUCTS, categories: CATEGORY_BY_ID, buy: BUY_BY_CATEGORY };
 const photo = (text, extra = {}) => analyzeLabel({ text, source: 'photo', ...extra }, ctx);
@@ -178,4 +178,30 @@ test('searchBrands: 이름에 없으면 스타일·원산지로', () => {
   assert.ok(searchBrands(BRANDS, '칠레').every((b) => b.cat === 'wine'));
   // 이름이 맞으면 이름이 먼저
   assert.equal(searchBrands(BRANDS, '발베니')[0].ko, '발베니');
+});
+
+test('dictionaryLookup: 사전에 있는 이름만 (없으면 AI 에게)', () => {
+  assert.match(dictionaryLookup('Westmalle Tripel').name_ko, /베스트말레/);
+  assert.match(dictionaryLookup('샤또 마고 2015').name_ko, /샤토 마고/);
+  assert.match(dictionaryLookup('청하').name_ko, /청하/);
+  assert.equal(dictionaryLookup('보르도 와인 추천'), null);
+  assert.equal(dictionaryLookup('처음 보는 수제 맥주'), null);
+  assert.equal(dictionaryLookup('없는술이름쀍'), null);
+});
+
+test('가격대: 오래 숙성한 위스키·코냑 XO 는 올려 잡음', () => {
+  const brand = { ko: 'X', tier: 1 };
+  assert.equal(priceTier(brand, 'whisky', { age: 12 }), 1);
+  assert.equal(priceTier(brand, 'whisky', { age: 15 }), 3);
+  assert.equal(priceTier(brand, 'whisky', { age: 18 }), 3);
+  assert.equal(priceTier({ ko: 'Y', tier: 3 }, 'whisky', { age: 18 }), 4);
+  assert.equal(priceTier(brand, 'whisky', { age: 30 }), 4);
+  assert.equal(priceTier({ ko: 'H', tier: 3 }, 'brandy', {}, 'HENNESSY X.O COGNAC'), 4);
+  assert.equal(priceTier({ ko: 'H', tier: 3 }, 'brandy', {}, 'HENNESSY VSOP'), 3);
+  // 실제 결과
+  const old = analyzeName('발렌타인 30년');
+  assert.match(old.name_ko, /발렌타인/);
+  assert.ok(old.price.krw_low >= 200000, `${old.price.krw_low}`);
+  assert.match(old.price.basis, /30년급/);
+  assert.ok(analyzeName('발렌타인 파이니스트').price.krw_high <= 90000);
 });

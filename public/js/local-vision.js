@@ -5,7 +5,7 @@
 // 글자 인식 파일(약 9MB)은 이 사이트(vendor/)에서 처음 한 번만 받고 브라우저에 저장돼요.
 import { BRANDS } from './content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from './content/index.js';
-import { analyzeLabel } from './lib/label.js';
+import { analyzeLabel, extractAttributes, matchBrands } from './lib/label.js';
 
 const abs = (path) => new URL(path, document.baseURI).href;
 export const OCR_DOWNLOAD_MB = 9;
@@ -170,4 +170,12 @@ export async function analyzeLocally(images, onStep = () => {}) {
 /** 이름으로 찾기 (글자 인식 없이 브랜드 사전·백과에서) */
 export function analyzeName(text) {
   return analyzeLabel({ text, source: 'text' }, { brands: BRANDS, products: PRODUCTS, categories: CATEGORY_BY_ID, buy: BUY_BY_CATEGORY });
+}
+
+/** 이름이 브랜드 사전에 있으면 사전으로 만든 설명, 없으면 null (그때는 AI 에게 물어봄) */
+export function dictionaryLookup(text) {
+  const hit = matchBrands(text, BRANDS, extractAttributes(text).votes)[0];
+  if (!hit || hit.score < 6) return null;
+  const result = analyzeName(text);
+  return result.is_alcohol ? result : null;
 }

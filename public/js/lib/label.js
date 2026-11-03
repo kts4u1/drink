@@ -351,6 +351,21 @@ const TIER_RANGES = {
   traditional: { 1: [1500, 20000], 2: [20000, 60000], 3: [60000, 150000] },
 };
 
+/**
+ * 가격대 등급: 대표 제품보다 오래 숙성한 위스키(18·21년 이상)나 코냑 XO 는 올려 잡음
+ * ("발렌타인 30년"을 대표 제품 가격으로 보여 주지 않게)
+ */
+export function priceTier(brand, cat, attrs, text = '') {
+  let tier = brand.tier || 1;
+  if (cat === 'whisky' && attrs.age) {
+    if (attrs.age >= 21) tier = 4;
+    else if (attrs.age >= 18) tier = Math.max(tier + 1, 3);
+    else if (attrs.age >= 13) tier = Math.max(tier, 3);
+  }
+  if (cat === 'brandy' && /\bx\.?\s?o\b/i.test(text)) tier = 4;
+  return Math.min(tier, 4);
+}
+
 /** 술 종류별 마시는 법 (백과 내용을 짧게) */
 const SERVE = {
   red: { temperature: '16~18℃ (냉장고에 15~20분)', glass: '볼이 넓은 레드 와인잔', methods: ['따고 20~30분 두면 부드러워져요', '잔은 1/3 정도만 채우기'] },
@@ -534,8 +549,10 @@ export function analyzeLabel({ text = '', off = null, barcode = null, source = '
     price = { krw_low: product.price[0], krw_high: product.price[1], basis: `앱 제품 목록의 참고 가격대 (${product.name}, 대형마트·전문점 기준)`, note: '행사·창고형 마트·면세점에서 더 쌀 수 있어요.' };
   } else if (brand?.tier) {
     const ranges = TIER_RANGES[cat] || TIER_RANGES.default;
-    const r = ranges[brand.tier] || ranges[1];
-    if (r) price = { krw_low: r[0], krw_high: r[1], basis: `${brand.ko} 대표 제품 기준의 대략적인 가격대`, note: '숙성 연수·라인·용량에 따라 크게 달라요. 정확한 가격은 검색으로 확인하세요.' };
+    const tier = priceTier(brand, cat, attrs, all);
+    const r = ranges[tier] || ranges[brand.tier] || ranges[1];
+    const what = tier > brand.tier ? `${brand.ko} ${attrs.age ? `${attrs.age}년` : 'XO'}급` : `${brand.ko} 대표 제품`;
+    if (r) price = { krw_low: r[0], krw_high: r[1], basis: `${what} 기준의 대략적인 가격대`, note: '숙성 연수·라인·용량에 따라 크게 달라요. 정확한 가격은 검색으로 확인하세요.' };
   }
 
   const similar = brand
