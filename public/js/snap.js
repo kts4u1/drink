@@ -274,6 +274,22 @@ async function identify({ images = [], text = '', thumb = null, preview = null, 
       result = await viaDevice({ images, text, t });
       method = images.length ? 'local' : 'brand';
     }
+    // 무료 AI 가 사진에서 술을 못 찾았으면 휴대폰 안 분석(바코드·글자)으로 한 번 더
+    if (server && images.length && !result.is_alcohol && method !== 'local') {
+      clearInterval(timer);
+      if (sheetIsCurrent(t)) t = openSheet(loadingHtml({ thumb: shown, text, steps: LOCAL_STEPS, note: '무료 AI가 알아보지 못해 휴대폰 안에서 한 번 더 살펴보는 중이에요.' }));
+      try {
+        const local = await viaDevice({ images, text, t });
+        if (local.is_alcohol) {
+          result = local;
+          method = 'local';
+          usedModel = null;
+          notice = '무료 AI가 알아보지 못해 휴대폰 안에서 다시 분석했어요.';
+        }
+      } catch {
+        /* 기기 안 분석도 못 하면 AI 결과(못 찾음)를 그대로 */
+      }
+    }
     if (result.is_alcohol) saveHistory({ result, thumb, text, model: usedModel, method });
     renderResult(result, { thumb: shown, text, model: usedModel, cached, method, notice });
     if (images.length) {

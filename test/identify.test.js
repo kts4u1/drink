@@ -495,3 +495,21 @@ test('Workers AI 사진: 사전에 없는 맥주를 AI 가 위스키로 지어�
   const eng = fakeAi((n) => (n === 1 ? { response: JSON.stringify(vision) } : { response: { ...SAMPLE, category: 'beer', style: 'lager', price: { krw_low: 2000, krw_high: 3000 } } }));
   assert.equal((await createWorkersAiIdentifier({ ai: eng }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result.style, '라거');
 });
+
+test('Workers AI 사진: 이름 칸이 비어도 라벨 글자로, 술 아니라고 해도 사전 브랜드면 술', async () => {
+  // 흐린 사진: 이름은 비웠지만 라벨 글자·종류는 읽음
+  const blurry = fakeAi((n) => (n === 1 ? { response: JSON.stringify({ is_alcohol: true, name: '', category: 'beer', label_text: 'Sengur ULTRA' }) } : { response: { ...SAMPLE, category: 'beer', name_ko: '셍구르 울트라', price: { krw_low: 2000, krw_high: 3000 } } }));
+  const r1 = (await createWorkersAiIdentifier({ ai: blurry }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  assert.equal(r1.is_alcohol, true);
+  assert.equal(blurry.calls.length, 2);
+  assert.match(blurry.calls[1].input.messages[1].content, /Sengur ULTRA/);
+  // 술이 아니라고 했지만 라벨 글자가 사전의 브랜드
+  const unsure = fakeAi(() => ({ response: JSON.stringify({ is_alcohol: false, name: '', label_text: 'JOHNNIE WALKER BLACK LABEL' }) }));
+  const r2 = (await createWorkersAiIdentifier({ ai: unsure }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  assert.match(r2.name_ko, /조니워커/);
+  // 진짜 술이 아니면 그대로
+  const cola = fakeAi(() => ({ response: JSON.stringify({ is_alcohol: false, name: '', label_text: 'Coca-Cola Zero' }) }));
+  const r3 = (await createWorkersAiIdentifier({ ai: cola }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  assert.equal(r3.is_alcohol, false);
+  assert.equal(cola.calls.length, 1);
+});

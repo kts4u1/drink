@@ -291,8 +291,14 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
       throw Object.assign(new IdentifyError('무료 AI 가 지금 응답하지 않아요. 기기 안에서 분석할게요.', 502, 'upstream'), { detail: { vision: err.message.slice(0, 200) } });
     }
     const vision = parseVision(vOut);
-    const base = str(vision.name) || str(vision.name_original);
+    const label = str(vision.label_text, 150);
+    let base = str(vision.name) || str(vision.name_original);
+    // 이름 칸은 비웠지만 라벨 글자와 술 종류는 읽었으면 라벨 글자를 이름으로 (흐린 사진에서 생김)
+    if (!base && vision.is_alcohol !== false && label && CATEGORIES.includes(vision.category) && vision.category !== 'other') base = label.slice(0, 60);
     if (vision.is_alcohol === false || !base) {
+      // 술이 아니라고 했어도 라벨 글자가 브랜드 사전에 있으면 술로 봄
+      const dict = label ? dictionaryResult({ name: label, label_text: label }) : null;
+      if (dict) return { result: mergeVision(dict, { ...vision, name: '', category: dict.category }), model, usage: vOut?.usage ?? null, source: 'dictionary' };
       return {
         result: {
           is_alcohol: false,
