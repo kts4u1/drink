@@ -14,7 +14,7 @@ export const MAX_IMAGES = 3;
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 한 장 (화면에서 1600px 로 줄여 보내서 보통 0.3~0.8MB)
 export const MAX_TOTAL_BYTES = 9 * 1024 * 1024;
 export const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
-const CACHE_VERSION = 'v2'; // v1 에는 한국어가 깨진 사진 결과가 저장돼 있어 버림
+const CACHE_VERSION = 'v3'; // v1: 한국어가 깨진 사진 결과, v2: 맥주 사진에 위스키 설명이 붙은 결과가 저장돼 있어 버림
 
 const DATA_URL = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/;
 

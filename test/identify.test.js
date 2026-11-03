@@ -270,7 +270,7 @@ test('Worker: CORS·허용 주소·분당 제한 바인딩·KV', async (t) => {
   assert.equal(ok.headers.get('Access-Control-Allow-Origin'), 'https://kts4u1.github.io');
   assert.equal((await ok.json()).result.category, 'whisky');
   assert.equal(limiterCalls, 1);
-  assert.ok([...kv.map.keys()].some((k) => k.startsWith('v2:t:')), 'KV 에 결과 저장');
+  assert.ok([...kv.map.keys()].some((k) => k.startsWith('v3:t:')), 'KV 에 결과 저장');
 
   assert.equal((await post('https://evil.example')).status, 403);
   assert.equal((await post(null)).status, 403);
@@ -293,7 +293,7 @@ test('ensure-kv: wrangler 출력 해석, KV 설정 빼기', () => {
 });
 
 // ---------- Cloudflare Workers AI (무료) ----------
-import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, repairJson, skeleton } from '../server/identify/workers-ai.js';
+import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, repairJson, skeleton, visionHint } from '../server/identify/workers-ai.js';
 
 function fakeAi(handler) {
   const calls = [];
@@ -415,7 +415,7 @@ test('Workers AI: 깨진 글자 지우기', () => {
 
 test('Workers AI 사진: 사전에 없으면 영어로 읽은 이름 → 한국어 설명, 라벨 값으로 덮어쓰기', async () => {
   const vision = { is_alcohol: true, name: 'Chateau Obscur Rouge Reserve', producer: 'Chateau Obscur', category: 'wine', age_or_vintage: '2019', abv: '13.5%', volume: '750ml', label_text: 'CHATEAU OBSCUR ROUGE RESERVE 2019 13.5% vol', confidence: 'high' };
-  const ai = fakeAi((n, model, input) => (n === 1 ? { response: 'Sure! ' + JSON.stringify(vision) } : { response: { ...SAMPLE, abv: '43%', confidence: 'medium' } }));
+  const ai = fakeAi((n, model, input) => (n === 1 ? { response: 'Sure! ' + JSON.stringify(vision) } : { response: { ...SAMPLE, category: 'wine', abv: '43%', confidence: 'medium' } }));
   const r = await createWorkersAiIdentifier({ ai }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] });
   assert.equal(ai.calls.length, 2);
   // 1단계: 사진 + 영어 지시, 짧게
@@ -457,4 +457,34 @@ test('Workers AI 사진: 사전에 없으면 영어로 읽은 이름 → 한국�
   assert.equal(mergeVision({}, { name: 'X', age_or_vintage: '10' }).age_or_vintage, '10년');
   assert.equal(mergeVision({}, { name: 'X', age_or_vintage: '2019' }).age_or_vintage, '2019 빈티지');
   assert.equal(mergeVision({}, { name: 'X', age_or_vintage: 'NV' }).age_or_vintage, 'NV');
+});
+
+test('Workers AI 사진: 사전에 없는 맥주를 AI 가 위스키로 지어내면 맥주 일반 설명·맥주 가격으로', async () => {
+  // 실제로 있었던 일: Sengur Ultra(맥주 캔) → 이름만 물으니 "스페인산 블렌디드 위스키", 2만~3만 원
+  const vision = { is_alcohol: true, name: 'Sengur Ultra', category: 'beer', style: 'Extra Smooth Lager', abv: '4.3%', volume: '0.5L', country: 'Kazakhstan', label_text: 'SENGUR ULTRA EXTRA SMOOTH LAGER', confidence: 'high' };
+  const whisky = { ...SAMPLE, name_ko: '셍구르 울트라', category: 'whisky', style: '블렌디드 위스키', summary: '스페인산 블렌디드 위스키', country: '스페인', price: { krw_low: 20000, krw_high: 30000, basis: '대형마트', note: '' } };
+  const ai = fakeAi((n) => (n === 1 ? { response: JSON.stringify(vision) } : { response: whisky }));
+  const r = (await createWorkersAiIdentifier({ ai }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  // 설명 단계에 사진에서 읽은 종류·도수를 넘김
+  const prompt = ai.calls[1].input.messages[1].content;
+  assert.match(prompt, /종류\(category\): beer/);
+  assert.match(prompt, /4\.3%/);
+  assert.match(prompt, /종류를 바꾸지 마세요/);
+  // 결과는 맥주
+  assert.equal(r.category, 'beer');
+  assert.equal(r.name_ko, 'Sengur Ultra');
+  assert.doesNotMatch(r.summary + r.description + r.style, /위스키/);
+  assert.ok(r.price.krw_high <= 20000, String(r.price.krw_high));
+  assert.equal(r.country, '카자흐스탄');
+  assert.equal(r.abv, '4.3%');
+  assert.match(r.how_to_drink.glass, /맥주/);
+  assert.match(r.confidence_note, /일반적인 설명/);
+
+  // 종류는 맞췄지만 가격만 맥주 가격이 아니면 가격만 고침
+  const pricey = fakeAi((n) => (n === 1 ? { response: JSON.stringify(vision) } : { response: { ...SAMPLE, category: 'beer', name_ko: '셍구르 울트라', price: { krw_low: 25000, krw_high: 30000 } } }));
+  const r2 = (await createWorkersAiIdentifier({ ai: pricey }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  assert.equal(r2.name_ko, '셍구르 울트라');
+  assert.ok(r2.price.krw_high <= 20000);
+  assert.match(r2.price.note, /2\.5만~3만 원/);
+  assert.equal(visionHint({}), '');
 });

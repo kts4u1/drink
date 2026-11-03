@@ -112,6 +112,9 @@ test('analyzeLabel: 모르는 와인은 지역·품종으로 이름 붙이기', 
   assert.match(r.name_ko, /생산자 확인 필요/);
   assert.equal(r.confidence, 'low');
   assert.match(r.age_or_vintage, /2018/);
+  // 브랜드를 몰라도 종류로 짐작한 가격대
+  assert.ok(r.price.krw_low > 0 && r.price.krw_high <= 60000, JSON.stringify(r.price));
+  assert.match(r.price.basis, /종류로 짐작/);
 });
 
 test('analyzeLabel: 바코드 제품(Open Food Facts)만 있어도 알아봄', () => {

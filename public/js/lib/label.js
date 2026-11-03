@@ -339,7 +339,7 @@ export function matchBrands(rawText, brands, votes = null) {
 
 // ---------- 설명 만들기 ----------
 
-const TIER_RANGES = {
+export const TIER_RANGES = {
   whisky: { 1: [20000, 40000], 2: [40000, 90000], 3: [90000, 200000], 4: [200000, 600000] },
   brandy: { 1: [20000, 50000], 2: [50000, 90000], 3: [90000, 200000], 4: [250000, 700000] },
   wine: { 1: [8000, 25000], 2: [25000, 60000], 3: [60000, 150000], 4: [200000, 1500000] },
@@ -364,6 +364,27 @@ export function priceTier(brand, cat, attrs, text = '') {
   }
   if (cat === 'brandy' && /\bx\.?\s?o\b/i.test(text)) tier = 4;
   return Math.min(tier, 4);
+}
+
+/** 제품을 모를 때 종류만으로 짐작한 흔한 가격대 */
+export function categoryPrice(cat, catName = '') {
+  const ranges = TIER_RANGES[cat] || TIER_RANGES.default;
+  // 맥주·소주·캔 술·전통주는 가장 흔한 가격대만, 나머지는 입문~중간 가격대
+  const r = ['beer', 'soju', 'cocktail', 'traditional'].includes(cat) ? ranges[1] : [ranges[1][0], (ranges[2] || ranges[1])[1]];
+  return { krw_low: r[0], krw_high: r[1], basis: `${catName || '이 종류'} 한 병의 흔한 가격대 (제품을 몰라 종류로 짐작)`, note: '생산자·등급·용량에 따라 크게 달라요. 정확한 가격은 검색으로 확인하세요.' };
+}
+
+// 이 값보다 비싸게 나오면 그 종류 가격이 아니라고 봄 (AI 가 다른 술로 착각한 경우)
+const PRICE_CEILING = { beer: 20000, soju: 30000, cocktail: 15000 };
+
+/** 종류에 안 맞는 가격(맥주가 2만~3만 원 등)은 종류별 가격대로 바꿈 */
+export function sanePrice(result, catName = '') {
+  const ceiling = PRICE_CEILING[result?.category];
+  const p = result?.price;
+  if (!ceiling || !p || !(p.krw_high > ceiling || p.krw_low > ceiling)) return result;
+  const fixed = categoryPrice(result.category, catName);
+  const won = (n) => (n >= 10000 ? `${Math.round(n / 1000) / 10}만` : n.toLocaleString('ko-KR'));
+  return { ...result, price: { ...fixed, note: `처음 짐작한 가격(${won(p.krw_low)}~${won(p.krw_high)} 원)이 ${catName || '이 종류'} 가격과 맞지 않아 흔한 가격대로 바꿨어요.` } };
 }
 
 /** 술 종류별 마시는 법 (백과 내용을 짧게) */
@@ -553,6 +574,8 @@ export function analyzeLabel({ text = '', off = null, barcode = null, source = '
     const r = ranges[tier] || ranges[brand.tier] || ranges[1];
     const what = tier > brand.tier ? `${brand.ko} ${attrs.age ? `${attrs.age}년` : 'XO'}급` : `${brand.ko} 대표 제품`;
     if (r) price = { krw_low: r[0], krw_high: r[1], basis: `${what} 기준의 대략적인 가격대`, note: '숙성 연수·라인·용량에 따라 크게 달라요. 정확한 가격은 검색으로 확인하세요.' };
+  } else if (cat) {
+    price = categoryPrice(cat, category?.name);
   }
 
   const similar = brand

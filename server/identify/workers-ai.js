@@ -12,7 +12,7 @@
 //   3) 라벨에서 읽은 값(이름·도수·숙성·용량)으로 덮어쓰기 (mergeVision)
 import { BRANDS } from '../../public/js/content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from '../../public/js/content/index.js';
-import { analyzeLabel, extractAttributes, matchBrands } from '../../public/js/lib/label.js';
+import { analyzeLabel, extractAttributes, matchBrands, sanePrice } from '../../public/js/lib/label.js';
 import { IdentifyError } from './claude.js';
 import { SYSTEM_PROMPT, userText } from './prompt.js';
 import { RESULT_SCHEMA } from './schema.js';
@@ -91,6 +91,53 @@ export function dictionaryResult(vision) {
   return { ...local, confidence_note: `앱의 브랜드 사전(${hit.brand.ko})으로 설명했어요. 세부 제품(숙성 연수·라인)은 라벨에서 한 번 더 확인하세요.` };
 }
 
+const COUNTRY_KO = {
+  france: '프랑스', italy: '이탈리아', spain: '스페인', portugal: '포르투갈', germany: '독일', austria: '오스트리아', belgium: '벨기에',
+  netherlands: '네덜란드', 'czech republic': '체코', czechia: '체코', poland: '폴란드', denmark: '덴마크', greece: '그리스', hungary: '헝가리',
+  scotland: '스코틀랜드', ireland: '아일랜드', england: '영국', 'united kingdom': '영국', uk: '영국', wales: '영국 · 웨일스',
+  'united states': '미국', usa: '미국', us: '미국', america: '미국', canada: '캐나다', mexico: '멕시코', chile: '칠레', argentina: '아르헨티나',
+  australia: '호주', 'new zealand': '뉴질랜드', 'south africa': '남아프리카공화국', japan: '일본', china: '중국', taiwan: '대만',
+  korea: '한국', 'south korea': '한국', thailand: '태국', vietnam: '베트남', philippines: '필리핀', singapore: '싱가포르', india: '인도',
+  russia: '러시아', kazakhstan: '카자흐스탄', sweden: '스웨덴', finland: '핀란드', norway: '노르웨이', iceland: '아이슬란드',
+  jamaica: '자메이카', cuba: '쿠바', 'dominican republic': '도미니카 공화국', guyana: '가이아나', israel: '이스라엘',
+};
+export const countryKo = (v) => COUNTRY_KO[str(v, 60).toLowerCase()] || str(v, 60);
+
+/** 2단계(이름으로 설명)에 넘길 정보: 사진의 라벨에서 읽은 종류·도수·용량 */
+export function visionHint(v) {
+  const facts = [
+    CATEGORIES.includes(v.category) && v.category !== 'other' ? `종류(category): ${v.category}` : '',
+    str(v.style) ? `스타일: ${str(v.style)}` : '',
+    str(v.abv, 40) ? `도수: ${withUnit(str(v.abv, 40), '%')}` : '',
+    str(v.volume, 40) ? `용량: ${withUnit(str(v.volume, 40), 'ml')}` : '',
+    str(v.country, 60) ? `나라: ${str(v.country, 60)}` : '',
+    str(v.label_text) ? `라벨 글자: "${str(v.label_text, 150)}"` : '',
+  ].filter(Boolean);
+  if (!facts.length) return '';
+  return `참고 (사진의 라벨에서 읽은 정보): ${facts.join(' · ')}
+이 정보와 어긋나게 설명하지 마세요. 특히 종류를 바꾸지 마세요. 이 제품을 잘 모르면 지어내지 말고, 이 종류·스타일의 일반적인 특징과 한국 가격대로 설명하고 confidence 는 low 로 하세요.`;
+}
+
+/**
+ * 제품을 몰라 AI 설명이 다른 종류로 빗나갔을 때: 사진에서 읽은 종류의 일반 설명 (앱의 백과 기준)
+ * 브랜드는 맞추지 않음 (사전에 없는 제품이라 여기까지 왔으니까)
+ */
+export function genericResult(v) {
+  const cat = CATEGORY_BY_ID[v.category];
+  if (!cat) return null;
+  const text = [str(v.style), str(v.label_text, 200), v.category, cat.name].filter(Boolean).join(' ');
+  const local = analyzeLabel({ text, source: 'text' }, { brands: [], products: [], categories: CATEGORY_BY_ID, buy: BUY_BY_CATEGORY });
+  if (!local.is_alcohol || local.category !== v.category) return null;
+  const kind = [str(v.style) && local.style, cat.name].filter(Boolean).join(' ') || cat.name;
+  return {
+    ...local,
+    name_ko: str(v.name),
+    country: countryKo(v.country) || local.country,
+    confidence: 'medium',
+    confidence_note: `이 제품의 자세한 정보는 없어서 ${kind}의 일반적인 설명과 가격대를 보여 드려요.`,
+  };
+}
+
 /** 2단계 한국어 설명에 사진에서 읽은 값(이름·도수·숙성·용량·라벨 글자)을 덮어쓰기 */
 export function mergeVision(korean, vision) {
   const conf = [vision.confidence, korean.confidence].filter((c) => RANK[c]).sort((a, b) => RANK[a] - RANK[b])[0] || 'low';
@@ -110,8 +157,8 @@ export function mergeVision(korean, vision) {
   };
 }
 
-export function buildWorkersAiInput({ images = [], text = '', withFormat = true }) {
-  const prompt = userText({ text, imageCount: images.length });
+export function buildWorkersAiInput({ images = [], text = '', withFormat = true, hint = '' }) {
+  const prompt = userText({ text, imageCount: images.length }) + (hint ? `\n\n${hint}` : '');
   const content = images.length
     ? [...images.map((img) => ({ type: 'image_url', image_url: { url: `data:${img.mediaType};base64,${img.data}` } })), { type: 'text', text: prompt }]
     : prompt;
@@ -252,10 +299,17 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
     // 브랜드 사전에 있으면 사전으로 (AI 를 한 번 덜 부름)
     const dict = dictionaryResult(v);
     if (dict) return { result: mergeVision(dict, v), model, usage: vOut?.usage ?? null, source: 'dictionary' };
-    // 없으면 이름으로 한국어 설명 받기 (이름에 숙성 연수·빈티지가 없으면 붙여서)
+    // 없으면 이름으로 한국어 설명 받기 (이름에 숙성 연수·빈티지가 없으면 붙여서, 사진에서 읽은 종류·도수도 같이)
     const age = str(vision.age_or_vintage, 40);
-    const korean = await identifyText(age && !base.includes(age) ? `${base} ${age}` : base);
-    return { result: mergeVision(cleanKorean(korean.result, base), v), model, usage: { vision: vOut?.usage ?? null, text: korean.usage } };
+    const korean = await identifyText(age && !base.includes(age) ? `${base} ${age}` : base, visionHint(v));
+    let result = cleanKorean(korean.result, base);
+    if (str(v.country, 60)) result.country = countryKo(v.country);
+    // AI 가 제품을 몰라 다른 종류로 지어냈으면(맥주 사진인데 위스키 설명) 그 설명은 버리고 종류의 일반 설명으로
+    if (CATEGORIES.includes(v.category) && v.category !== 'other' && result.category && result.category !== v.category) {
+      result = genericResult(v) || result;
+    }
+    result = sanePrice(mergeVision(result, v), CATEGORY_BY_ID[v.category]?.name);
+    return { result, model, usage: { vision: vOut?.usage ?? null, text: korean.usage } };
   }
 
   function parseVision(out) {
@@ -271,15 +325,15 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
   }
 
   /** 이름 → 한국어 설명 (사진 2단계에서도 씀) */
-  async function identifyText(text) {
+  async function identifyText(text, hint = '') {
     let out;
     try {
-      out = await run(buildWorkersAiInput({ text, withFormat: true }));
+      out = await run(buildWorkersAiInput({ text, withFormat: true, hint }));
     } catch (err) {
       if (err instanceof IdentifyError) throw err;
       // JSON 형식 강제를 못 지키면 형식 없이 한 번 더 (지시문의 견본으로 JSON 을 받음)
       try {
-        out = await run(buildWorkersAiInput({ text, withFormat: false }));
+        out = await run(buildWorkersAiInput({ text, withFormat: false, hint }));
       } catch (err2) {
         if (err2 instanceof IdentifyError) throw err2;
         throw Object.assign(new IdentifyError('무료 AI 가 지금 응답하지 않아요. 기기 안에서 분석할게요.', 502, 'upstream'), {
