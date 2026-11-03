@@ -62,6 +62,8 @@ const str = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : 
 const RANK = { high: 3, medium: 2, low: 1 };
 // 숫자만 읽었으면 단위 붙이기 ("40" → "40%", "700" → "700ml")
 const withUnit = (v, unit) => (/^\d+(\.\d+)?$/.test(v) ? `${v}${unit}` : v);
+// 숫자만 읽은 숙성 연수·빈티지 ("10" → "10년", "2019" → "2019 빈티지")
+const ageText = (v) => (/^(19|20)\d\d$/.test(v) ? `${v} 빈티지` : /^\d{1,2}$/.test(v) ? `${v}년` : v);
 
 // 한국어가 아닌 글자(키릴 문자 등)나 깨진 글자가 섞여 나오는 경우가 있어 지움
 const JUNK = /[\uD800-\uDFFF\u0400-\u04FF\u0E00-\u0E7F\uFFFD]/g;
@@ -100,7 +102,7 @@ export function mergeVision(korean, vision) {
     name_original: name || korean.name_original,
     producer: str(vision.producer) || korean.producer,
     category: CATEGORIES.includes(vision.category) ? vision.category : korean.category,
-    age_or_vintage: str(vision.age_or_vintage, 40) || korean.age_or_vintage,
+    age_or_vintage: ageText(str(vision.age_or_vintage, 40)) || korean.age_or_vintage,
     abv: withUnit(str(vision.abv, 40), '%') || korean.abv,
     volume: withUnit(str(vision.volume, 40), 'ml') || korean.volume,
     confidence: conf,

@@ -454,4 +454,7 @@ test('Workers AI 사진: 사전에 없으면 영어로 읽은 이름 → 한국�
   assert.equal(units.abv, '40%');
   assert.equal(units.volume, '700ml');
   assert.equal(mergeVision({}, { name: 'X', abv: '43% vol' }).abv, '43% vol');
+  assert.equal(mergeVision({}, { name: 'X', age_or_vintage: '10' }).age_or_vintage, '10년');
+  assert.equal(mergeVision({}, { name: 'X', age_or_vintage: '2019' }).age_or_vintage, '2019 빈티지');
+  assert.equal(mergeVision({}, { name: 'X', age_or_vintage: 'NV' }).age_or_vintage, 'NV');
 });
