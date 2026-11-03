@@ -409,7 +409,7 @@ function renderResult(result, { thumb, text, model: usedModel, cached, method = 
       <div class="stat-row">
         <div><small>도수</small><b>${escapeHtml(result.abv || '라벨 확인')}</b></div>
         <div><small>용량</small><b>${escapeHtml(result.volume || '-')}</b></div>
-        <div><small>${isAi ? 'AI 추정가' : '예상 가격'}</small><b>${p.krw_low ? escapeHtml(fmtPriceRange([p.krw_low, p.krw_high]).replace('약 ', '')) : '알 수 없음'}</b></div>
+        <div><small>${isAi ? 'AI 추정가' : '예상 가격'}</small><b>${p.krw_low ? escapeHtml(fmtPriceRange([p.krw_low, p.krw_high]).replace('약 ', '')).replace('~', '~<wbr>') : '알 수 없음'}</b></div>
       </div>
     </div>
     <div class="detail-content">

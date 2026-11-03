@@ -12,7 +12,7 @@
 //   3) 라벨에서 읽은 값(이름·도수·숙성·용량)으로 덮어쓰기 (mergeVision)
 import { BRANDS } from '../../public/js/content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from '../../public/js/content/index.js';
-import { analyzeLabel, extractAttributes, matchBrands, sanePrice } from '../../public/js/lib/label.js';
+import { STYLE_HINTS, analyzeLabel, extractAttributes, matchBrands, sanePrice } from '../../public/js/lib/label.js';
 import { IdentifyError } from './claude.js';
 import { SYSTEM_PROMPT, userText } from './prompt.js';
 import { RESULT_SCHEMA } from './schema.js';
@@ -102,6 +102,14 @@ const COUNTRY_KO = {
   jamaica: '자메이카', cuba: '쿠바', 'dominican republic': '도미니카 공화국', guyana: '가이아나', israel: '이스라엘',
 };
 export const countryKo = (v) => COUNTRY_KO[str(v, 60).toLowerCase()] || str(v, 60);
+
+/** 영어로 나온 스타일("lager", "single malt")은 앱의 한국어 스타일 이름으로 */
+export function styleKo(style) {
+  const s = str(style, 80);
+  if (!s || /[가-힣]/.test(s)) return s;
+  const hit = STYLE_HINTS.find((h) => h.style && h.re.test(s.toLowerCase()));
+  return hit ? hit.style : s;
+}
 
 /** 2단계(이름으로 설명)에 넘길 정보: 사진의 라벨에서 읽은 종류·도수·용량 */
 export function visionHint(v) {
@@ -304,6 +312,7 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
     const korean = await identifyText(age && !base.includes(age) ? `${base} ${age}` : base, visionHint(v));
     let result = cleanKorean(korean.result, base);
     if (str(v.country, 60)) result.country = countryKo(v.country);
+    result.style = styleKo(result.style) || styleKo(v.style);
     // AI 가 제품을 몰라 다른 종류로 지어냈으면(맥주 사진인데 위스키 설명) 그 설명은 버리고 종류의 일반 설명으로
     if (CATEGORIES.includes(v.category) && v.category !== 'other' && result.category && result.category !== v.category) {
       result = genericResult(v) || result;

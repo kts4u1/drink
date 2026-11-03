@@ -666,7 +666,7 @@ dialog.loc-sheet { width: min(440px, 100vw); }
 .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 14px 0 0; }
 .stat-row div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
 .stat-row small { display: block; font-size: 12px; color: var(--muted); font-weight: 700; }
-.stat-row b { font-size: 15px; }
+.stat-row b { font-size: 15px; word-break: keep-all; overflow-wrap: normal; }
 .taste { display: grid; gap: 8px; margin: 4px 0 0; }
 .taste div { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: center; font-size: 13.5px; font-weight: 700; color: var(--muted); }
 .taste .bar { height: 8px; border-radius: 4px; background: var(--muted-bg); overflow: hidden; }

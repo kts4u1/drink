@@ -293,7 +293,7 @@ test('ensure-kv: wrangler 출력 해석, KV 설정 빼기', () => {
 });
 
 // ---------- Cloudflare Workers AI (무료) ----------
-import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, repairJson, skeleton, visionHint } from '../server/identify/workers-ai.js';
+import { buildVisionInput, buildWorkersAiInput, cleanKorean, createWorkersAiIdentifier, dictionaryResult, mergeVision, parseWorkersAiResponse, repairJson, skeleton, styleKo, visionHint } from '../server/identify/workers-ai.js';
 
 function fakeAi(handler) {
   const calls = [];
@@ -487,4 +487,11 @@ test('Workers AI 사진: 사전에 없는 맥주를 AI 가 위스키로 지어�
   assert.ok(r2.price.krw_high <= 20000);
   assert.match(r2.price.note, /2\.5만~3만 원/);
   assert.equal(visionHint({}), '');
+  assert.equal(styleKo('lager'), '라거');
+  assert.equal(styleKo('Single Malt Scotch'), '싱글 몰트');
+  assert.equal(styleKo('라거'), '라거');
+  assert.equal(styleKo('Something Else'), 'Something Else');
+  // AI 가 스타일을 영어로 줘도 화면에는 한국어
+  const eng = fakeAi((n) => (n === 1 ? { response: JSON.stringify(vision) } : { response: { ...SAMPLE, category: 'beer', style: 'lager', price: { krw_low: 2000, krw_high: 3000 } } }));
+  assert.equal((await createWorkersAiIdentifier({ ai: eng }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result.style, '라거');
 });
