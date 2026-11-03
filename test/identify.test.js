@@ -422,6 +422,8 @@ test('Workers AI 사진: 사전에 없으면 영어로 읽은 이름 → 한국�
   const first = ai.calls[0].input;
   assert.equal(first.messages[1].content[0].type, 'image_url');
   assert.match(first.messages[0].content, /English/);
+  // 애매하다고 "술 아님"으로 답하지 않게
+  assert.match(first.messages[0].content, /Do not answer is_alcohol false just because you are unsure/);
   assert.ok(first.max_tokens <= 600);
   assert.equal(first.response_format, undefined);
   // 2단계: 사진 없이 이름으로 (한국어가 깨지지 않게), 빈티지를 붙여서

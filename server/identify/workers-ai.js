@@ -38,7 +38,9 @@ const CATEGORIES = ['wine', 'whisky', 'beer', 'soju', 'traditional', 'sake', 'br
 const VISION_PROMPT = `You identify alcohol bottles from photos for a Korean drinks app. Look at the front label, back label, Korean importer sticker, bottle shape and capsule. Several photos are different sides of the same bottle.
 Answer with ONE JSON object only, written in English (romanize any Korean names), with no code fences and no other text:
 {"is_alcohol":true,"name":"full product name, e.g. Johnnie Walker Black Label 12 Year Old","producer":"","category":"${CATEGORIES.join('|')}","style":"short, e.g. Blended Scotch whisky, Bordeaux red wine","country":"","region":"","age_or_vintage":"","abv":"","volume":"","label_text":"main words and numbers you can read, max 150 characters","confidence":"high|medium|low","why":"what you saw, max 80 characters"}
-Rules: never invent an age, vintage or ABV that is not visible (use ""). Use confidence high only if you can read the product name. If this is not an alcohol bottle or it is too blurry, set is_alcohol to false and say why in "why".`;
+Rules: never invent an age, vintage or ABV that is not visible (use ""). Use confidence high only if you can read the product name.
+Do not answer is_alcohol false just because you are unsure. Set is_alcohol to false only when it is clearly not an alcoholic drink (soda, juice, water, food, a person, nothing readable) and say why in "why".
+If it looks like a beer can or bottle, a wine bottle or a spirits bottle, set is_alcohol true with your best category and confidence low, and copy the brand words you can read into "name".`;
 
 /** 1단계: 사진 → 영어로 짧게 */
 export function buildVisionInput({ images = [], text = '' }) {
