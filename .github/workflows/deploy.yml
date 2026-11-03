@@ -1,16 +1,17 @@
 # 배포
 # - 화면: GitHub Pages (https://kts4u1.github.io/drink/)
-# - 사진으로 술 알아보기 API: Cloudflare Worker (Secrets 가 있을 때만)
+# - 사진으로 술 알아보기 API: Cloudflare Worker + Workers AI 무료 할당량 (Cloudflare Secrets 가 있을 때만)
+#   (Worker 가 없어도 화면은 휴대폰 안에서 바코드·라벨 글자로 무료 분석해요)
 #
 # 기본 브랜치에 push 하거나, 매일 새벽 자동으로, 또는 Actions 탭 "Run workflow" 로 실행돼요.
 #
 # 필요한 설정
 #   Settings › Pages › Source = GitHub Actions                       (화면, 필수)
-#   Settings › Secrets and variables › Actions › New repository secret  (사진 인식, 선택)
-#     ANTHROPIC_API_KEY       Anthropic API 키
-#     CLOUDFLARE_API_TOKEN    Cloudflare API 토큰 ("Edit Cloudflare Workers" 템플릿)
+#   Settings › Secrets and variables › Actions › New repository secret  (무료 AI 사진 분석, 선택)
+#     CLOUDFLARE_API_TOKEN    Cloudflare API 토큰 ("Edit Cloudflare Workers" 템플릿, Workers AI 권한)
 #     CLOUDFLARE_ACCOUNT_ID   Cloudflare 계정 ID
-# Secrets 가 없으면 사진 인식 없이 화면만 배포해요.
+#     ANTHROPIC_API_KEY       (선택, 유료) wrangler.jsonc 의 AI_PROVIDER 를 anthropic 으로 바꿨을 때만
+# Secrets 가 없으면 Worker 없이 화면만 배포하고, 사진은 휴대폰 안에서 분석해요.
 name: GitHub Pages 배포
 
 on:
@@ -59,12 +60,9 @@ jobs:
         run: |
           if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
-            if [ -z "$ANTHROPIC_API_KEY" ]; then
-              echo "::warning::ANTHROPIC_API_KEY 가 없어서 Worker 는 배포하지만 사진 인식은 꺼져 있어요."
-            fi
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CLOUDFLARE_API_TOKEN·CLOUDFLARE_ACCOUNT_ID 가 없어서 사진 인식 API 는 건너뛰고 화면만 배포해요. (README 의 '사진으로 술 알아보기 켜기' 참고)"
+            echo "::notice::CLOUDFLARE_API_TOKEN·CLOUDFLARE_ACCOUNT_ID 가 없어서 무료 AI(Worker)는 건너뛰어요. 사진은 휴대폰 안에서 분석해요. (README 참고)"
           fi
       - uses: actions/checkout@v5
         if: steps.check.outputs.ok == 'true'
@@ -86,7 +84,7 @@ jobs:
           url=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "사진 인식 API: $url"
-      - name: Worker 에 Anthropic API 키 저장
+      - name: Worker 에 Anthropic API 키 저장 (선택, 유료 Claude 를 쓸 때만)
         if: steps.check.outputs.ok == 'true' && env.ANTHROPIC_API_KEY != ''
         run: printf '%s' "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY
 

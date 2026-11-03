@@ -241,6 +241,7 @@ test('Worker: CORS·허용 주소·분당 제한 바인딩·KV', async (t) => {
   const kv = kvMock();
   let limiterCalls = 0;
   const env = {
+    AI_PROVIDER: 'anthropic',
     ANTHROPIC_API_KEY: 'x',
     ANTHROPIC_BASE_URL: baseURL,
     ALLOWED_ORIGINS: 'https://kts4u1.github.io',
@@ -277,7 +278,7 @@ test('Worker: CORS·허용 주소·분당 제한 바인딩·KV', async (t) => {
   assert.equal(calls.length, 1, '두 번째부터는 저장된 결과');
 
   const health = await (await worker.fetch(new Request('https://x/api/health', { headers: { Origin: 'https://kts4u1.github.io' } }), env)).json();
-  assert.deepEqual([health.identify, health.model, health.dailyLimit], [true, 'claude-opus-5-5', 5]);
+  assert.deepEqual([health.identify, health.model, health.dailyLimit, health.provider], [true, 'claude-opus-5-5', 5, 'anthropic']);
   const off = await (await worker.fetch(new Request('https://x/api/health'), {})).json();
   assert.equal(off.identify, false);
 });
@@ -289,4 +290,79 @@ test('ensure-kv: wrangler 출력 해석, KV 설정 빼기', () => {
   const cfg = '{\n  "a": 1,\n  // kv-start\n  "kv_namespaces": [],\n  // kv-end\n  "b": 2\n}';
   assert.doesNotMatch(withoutKv(cfg), /kv_namespaces/);
   assert.match(withoutKv(cfg), /"b": 2/);
+});
+
+// ---------- Cloudflare Workers AI (무료) ----------
+import { buildWorkersAiInput, createWorkersAiIdentifier, parseWorkersAiResponse, skeleton } from '../server/identify/workers-ai.js';
+
+function fakeAi(handler) {
+  const calls = [];
+  return {
+    calls,
+    async run(model, input) {
+      calls.push({ model, input });
+      return handler(calls.length, model, input);
+    },
+  };
+}
+
+test('Workers AI 요청: 사진은 image_url data URL, JSON 견본·스키마', () => {
+  const input = buildWorkersAiInput({ images: [{ mediaType: 'image/jpeg', data: 'AAA' }], text: '' });
+  const user = input.messages[1];
+  assert.equal(user.content[0].type, 'image_url');
+  assert.equal(user.content[0].image_url.url, 'data:image/jpeg;base64,AAA');
+  assert.equal(input.response_format.type, 'json_schema');
+  assert.match(input.messages[0].content, /"name_ko":""/);
+  assert.ok(input.max_tokens >= 2000);
+  const text = buildWorkersAiInput({ text: '발베니', withFormat: false });
+  assert.equal(typeof text.messages[1].content, 'string');
+  assert.equal(text.response_format, undefined);
+  assert.equal(skeleton(RESULT_SCHEMA).tasting.nose, '');
+});
+
+test('Workers AI 응답 읽기: 객체, 글 속 JSON, 코드 블록', () => {
+  assert.deepEqual(parseWorkersAiResponse({ response: { a: 1 } }), { a: 1 });
+  assert.deepEqual(parseWorkersAiResponse({ response: '네, 결과입니다:\n```json\n{"a":2}\n```' }), { a: 2 });
+  assert.throws(() => parseWorkersAiResponse({ response: '모르겠어요' }), (e) => e.code === 'bad_json');
+});
+
+test('Workers AI: 성공, JSON 형식 실패 시 형식 없이 다시, 무료 할당량 소진', async () => {
+  const ok = fakeAi(() => ({ response: SAMPLE, usage: { prompt_tokens: 1500, completion_tokens: 800 } }));
+  const r = await createWorkersAiIdentifier({ ai: ok }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] });
+  assert.equal(r.result.name_ko, '발베니 12년 더블우드');
+  assert.equal(ok.calls[0].model, '@cf/meta/llama-4-scout-17b-16e-instruct');
+
+  const retry = fakeAi((n) => {
+    if (n === 1) throw new Error("JSON Mode couldn't be met");
+    return { response: JSON.stringify(SAMPLE) };
+  });
+  const r2 = await createWorkersAiIdentifier({ ai: retry }).identify({ text: '발베니' });
+  assert.equal(r2.result.category, 'whisky');
+  assert.equal(retry.calls.length, 2);
+  assert.equal(retry.calls[1].input.response_format, undefined);
+
+  const quota = fakeAi(() => {
+    throw new Error('AiError: 4006: you have used up your daily free allocation of 10,000 neurons');
+  });
+  await assert.rejects(createWorkersAiIdentifier({ ai: quota }).identify({ text: '발베니' }), (e) => e.code === 'free_quota' && e.status === 429);
+
+  const down = fakeAi(() => {
+    throw new Error('InferenceUpstreamError');
+  });
+  await assert.rejects(createWorkersAiIdentifier({ ai: down }).identify({ text: '발베니' }), (e) => e.code === 'upstream');
+});
+
+test('Worker: 기본은 무료 Workers AI, Claude 는 AI_PROVIDER=anthropic 일 때만', async () => {
+  const ai = fakeAi(() => ({ response: SAMPLE }));
+  const env = { AI: ai, ALLOWED_ORIGINS: 'https://kts4u1.github.io', ANTHROPIC_API_KEY: 'paid-key', CACHE: kvMock() };
+  const health = await (await worker.fetch(new Request('https://x/api/health'), env)).json();
+  assert.deepEqual([health.identify, health.provider, health.free, health.dailyLimit], [true, 'workers-ai', true, 50]);
+  const res = await worker.fetch(
+    new Request('https://x/api/identify', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://kts4u1.github.io' }, body: JSON.stringify({ text: '발베니 12년' }) }),
+    env,
+  );
+  assert.equal(res.status, 200);
+  assert.equal(ai.calls.length, 1, '키가 있어도 유료 Claude 를 부르지 않음');
+  const paid = await (await worker.fetch(new Request('https://x/api/health'), { ...env, AI_PROVIDER: 'anthropic' })).json();
+  assert.deepEqual([paid.provider, paid.free], ['anthropic', false]);
 });

@@ -1,5 +1,7 @@
 // 술 찾기 탭: 제품 검색 → 상세(맛·참고 가격·어디서 사면 좋을지·내 주변 살 곳)
+import { BRANDS } from './content/brands.js';
 import { CATEGORIES, CATEGORY_BY_ID, GLOSSARY, PRODUCTS } from './content/index.js';
+import { searchBrands } from './lib/label.js';
 import { searchCategories, searchProducts, searchTerms } from './lib/search.js';
 import { mapSearchLinks } from './place.js';
 import { openProduct } from './sheets.js';
@@ -54,9 +56,19 @@ function render() {
   renderCats(counts, total);
   els.sort.value = prefs.sort;
 
-  // 목록에 없는 술도 많으니 검색어가 있으면 늘 AI 에게 물어볼 수 있게
+  // 목록에 없는 술도 많으니 검색어가 있으면 늘 자세히 알아볼 수 있게 (무료 AI 또는 브랜드 사전)
+  const brands = query.length >= 2 ? searchBrands(BRANDS, query, 6) : [];
   els.ask.innerHTML = query.length >= 2
-    ? `<button type="button" class="ask-ai" data-ask="${escapeHtml(query)}"><span aria-hidden="true">🤖</span><span><b>AI에게 "${escapeHtml(query)}" 물어보기</b><small>목록에 없는 와인·위스키·코냑도 이름·맛·가격·마시는 법을 알려줘요</small></span></button>`
+    ? `<button type="button" class="ask-ai" data-ask="${escapeHtml(query)}"><span aria-hidden="true">🔎</span><span><b>"${escapeHtml(query)}" 자세히 알아보기</b><small>목록에 없는 와인·위스키·코냑도 종류·맛·가격대·마시는 법을 알려줘요</small></span></button>${
+        brands.length
+          ? `<div class="brand-hits"><small>브랜드 사전 ${brands.length}곳</small>${brands
+              .map((b) => {
+                const c = CATEGORY_BY_ID[b.cat];
+                return `<button type="button" class="brand-hit" data-brand="${escapeHtml(b.ko)}"><span aria-hidden="true">${c?.emoji || '🍾'}</span><b>${escapeHtml(b.ko)}</b><small>${escapeHtml([c?.name, b.origin].filter(Boolean).join(' · '))}</small></button>`;
+              })
+              .join('')}</div>`
+          : ''
+      }`
     : '';
 
   // 검색어에 맞는 백과 글·용어
@@ -73,7 +85,7 @@ function render() {
   if (!list.length) {
     const links = mapSearchLinks('보틀샵');
     els.summary.innerHTML = query ? `<strong>"${escapeHtml(query)}"</strong> 검색 결과` : '';
-    els.list.innerHTML = `<div class="empty"><strong>대표 제품 목록에는 없어요</strong>위의 <b>AI에게 물어보기</b>를 누르거나, 아래에서 가격과 파는 곳을 직접 찾아보세요.
+    els.list.innerHTML = `<div class="empty"><strong>대표 제품 목록에는 없어요</strong>위의 <b>자세히 알아보기</b>를 누르거나, 아래에서 가격과 파는 곳을 직접 찾아보세요.
       <div class="link-grid" style="margin-top:14px">
         <a class="primary" href="https://search.naver.com/search.naver?query=${encodeURIComponent(`${query} 가격`)}" target="_blank" rel="noopener">네이버에서 가격 검색</a>
         <a href="${links.kakao}" target="_blank" rel="noopener">근처 보틀샵 (카카오맵)</a>

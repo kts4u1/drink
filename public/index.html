@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://nominatim.openstreetmap.org https://*.workers.dev; base-uri 'self'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self' https://nominatim.openstreetmap.org https://*.workers.dev https://world.openfoodfacts.org; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>술술 · 술 백과와 내 주변 최저가</title>
   <meta name="description" content="와인·위스키·막걸리까지 술을 쉽게 알려주고, 내 주변 술 파는 곳과 소주·맥주·막걸리 최저가를 보여주는 앱.">
@@ -45,10 +45,10 @@
 
     <!-- 술 찾기 -->
     <section class="view" id="view-find" role="tabpanel" aria-labelledby="tab-find" hidden>
-      <section class="snap-hero" id="snapHero" data-ready="null">
+      <section class="snap-hero" id="snapHero" data-ready="true">
         <div class="snap-hero-text">
           <h1>📷 사진으로 술 알아보기</h1>
-          <p>라벨을 찍으면 AI가 <b>이름·종류·맛·마시는 법·가격</b>까지 알려줘요. 와인·위스키·코냑 무엇이든 괜찮아요.</p>
+          <p>라벨을 찍으면 <b>이름·종류·맛·마시는 법·가격대</b>까지 무료로 알려줘요. 와인·위스키·코냑 무엇이든 괜찮아요.</p>
         </div>
         <div class="snap-buttons">
           <label class="snap-btn primary"><input type="file" accept="image/*" capture="environment" id="snapCamera" hidden><span aria-hidden="true">📷</span> 사진 찍기</label>
@@ -60,7 +60,7 @@
       </section>
       <div class="history" id="snapHistory" hidden></div>
 
-      <h2 class="section-title">🔎 이름으로 찾기 <small>대표 제품 + AI에게 묻기</small></h2>
+      <h2 class="section-title">🔎 이름으로 찾기 <small>대표 제품 + 브랜드 사전 295곳</small></h2>
       <div class="panel filters">
         <label class="searchbar">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>

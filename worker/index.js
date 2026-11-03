@@ -1,18 +1,22 @@
-// Cloudflare Worker: 사진으로 술 알아보기 API
+// Cloudflare Worker: 사진으로 술 알아보기 API (무료 AI)
 //   POST /api/identify   사진(최대 3장) 또는 이름 → Claude 가 알아본 결과
 //   GET  /api/health     설정 상태
 //
 // 화면은 GitHub Pages(https://kts4u1.github.io/drink/)에 있고 이 Worker 는 API 만 맡습니다.
-// API 키(ANTHROPIC_API_KEY)는 Worker 시크릿에만 있고 브라우저로 나가지 않습니다.
+// 기본은 Cloudflare Workers AI 의 무료 하루 할당량을 써서 돈이 들지 않아요. (유료 Claude 는 선택)
 //
 // 설정 (wrangler.jsonc)
 //   vars.ALLOWED_ORIGINS  이 주소들의 화면만 API 를 부를 수 있음 (쉼표로 구분)
 //   vars.DAILY_LIMIT      하루 최대 AI 호출 수 (비용 보호)
-//   vars.CLAUDE_MODEL     쓸 모델 (기본 claude-opus-5-5)
+//   vars.AI_PROVIDER      workers-ai (기본, 무료 하루 할당량) 또는 anthropic (유료 Claude, ANTHROPIC_API_KEY 필요)
+//   vars.WORKERS_AI_MODEL Workers AI 모델 (기본 Llama 4 Scout)
+//   vars.CLAUDE_MODEL     Claude 모델 (anthropic 일 때)
+//   AI                    Workers AI 바인딩
 //   IDENTIFY_LIMITER      IP 별 1분 제한 (Rate Limiting 바인딩)
 //   CACHE                 결과 캐시·하루 사용량 (Workers KV)
 import { DEFAULT_MODEL, createIdentifier } from '../server/identify/claude.js';
 import { createMemoryStore, handleIdentify, healthBody } from '../server/identify/handler.js';
+import { DEFAULT_WORKERS_AI_MODEL, createWorkersAiIdentifier } from '../server/identify/workers-ai.js';
 
 const memoryStore = createMemoryStore(200);
 
@@ -57,12 +61,18 @@ function json(body, status, origin) {
 }
 
 export function identifierForEnv(env) {
-  if (!env.ANTHROPIC_API_KEY) return null;
-  return createIdentifier({
-    apiKey: env.ANTHROPIC_API_KEY,
-    model: env.CLAUDE_MODEL || DEFAULT_MODEL,
-    baseURL: env.ANTHROPIC_BASE_URL || undefined, // 테스트용
-  });
+  const provider = String(env.AI_PROVIDER || 'workers-ai').toLowerCase();
+  // 유료 Claude 는 AI_PROVIDER=anthropic 으로 직접 켰을 때만
+  if (provider === 'anthropic' && env.ANTHROPIC_API_KEY) {
+    return createIdentifier({
+      apiKey: env.ANTHROPIC_API_KEY,
+      model: env.CLAUDE_MODEL || DEFAULT_MODEL,
+      baseURL: env.ANTHROPIC_BASE_URL || undefined, // 테스트용
+    });
+  }
+  // 기본: Cloudflare Workers AI (무료 하루 할당량)
+  if (env.AI) return createWorkersAiIdentifier({ ai: env.AI, model: env.WORKERS_AI_MODEL || DEFAULT_WORKERS_AI_MODEL });
+  return null;
 }
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
@@ -79,7 +89,7 @@ export default {
       return new Response(null, { status: 204, headers });
     }
 
-    const dailyLimit = Number(env.DAILY_LIMIT ?? 100) || 0;
+    const dailyLimit = Number(env.DAILY_LIMIT ?? 50) || 0;
     const identifier = identifierForEnv(env);
 
     if (url.pathname === '/api/health' && request.method === 'GET') {

@@ -111,7 +111,14 @@ export async function handleIdentify({ body, ip = 'unknown' }, { identifier, sto
 
 /** GET /api/health */
 export function healthBody({ identifier, dailyLimit }) {
-  return { ok: true, identify: Boolean(identifier), model: identifier?.model ?? null, dailyLimit: dailyLimit || null };
+  return {
+    ok: true,
+    identify: Boolean(identifier),
+    provider: identifier ? identifier.provider || 'anthropic' : null,
+    free: Boolean(identifier?.free),
+    model: identifier?.model ?? null,
+    dailyLimit: dailyLimit || null,
+  };
 }
 
 /** 메모리 저장소 (Node 개발 서버, 또는 Worker 에 KV 가 없을 때) */

@@ -70,6 +70,8 @@ export function createIdentifier({ apiKey, model = DEFAULT_MODEL, baseURL, effor
 
   return {
     model,
+    provider: 'anthropic',
+    free: false,
     async identify({ images = [], text = '' }) {
       let response;
       try {

@@ -13,6 +13,25 @@ import { createMemoryLimiter, createMemoryStore, handleIdentify, healthBody } fr
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+/** zxing-wasm 의 dist 폴더 (package.json 을 내보내지 않아서 reader 진입점에서 거슬러 올라감) */
+export function zxingDist() {
+  return path.resolve(path.dirname(require.resolve('zxing-wasm/reader')), '..', '..');
+}
+
+/** 화면에서 쓰는 라이브러리 파일 (개발 서버는 node_modules 에서 바로, 배포는 build.js 가 dist/vendor 로 복사) */
+export function vendorDirs() {
+  const pkg = (name) => path.dirname(require.resolve(`${name}/package.json`));
+  return [
+    ['/vendor/leaflet', path.dirname(require.resolve('leaflet/dist/leaflet.js'))],
+    ['/vendor/tesseract', path.join(pkg('tesseract.js'), 'dist')],
+    ['/vendor/tesseract-core', pkg('tesseract.js-core')],
+    ['/vendor/tessdata', path.join(pkg('@tesseract.js-data/eng'), '4.0.0_best_int')],
+    ['/vendor/tessdata', path.join(pkg('@tesseract.js-data/kor'), '4.0.0_best_int')],
+    ['/vendor/zxing/es', path.join(zxingDist(), 'es')],
+    ['/vendor/zxing', path.join(zxingDist(), 'reader')],
+  ];
+}
+
 export function loadEnvFile(file = path.join(ROOT, '.env')) {
   if (fs.existsSync(file)) process.loadEnvFile(file);
 }
@@ -48,8 +67,7 @@ export function createApp({ identifier = null, dailyLimit = 0, limiter = createM
     return res.status(500).json({ error: '서버 오류가 발생했어요.' });
   });
 
-  const leafletDist = path.dirname(require.resolve('leaflet/dist/leaflet.js'));
-  app.use('/vendor/leaflet', express.static(leafletDist, { maxAge: '7d' }));
+  for (const [route, dir] of vendorDirs()) app.use(route, express.static(dir, { maxAge: '7d' }));
   app.use('/data', express.static(path.join(ROOT, 'data'), { maxAge: 0 }));
   app.use(express.static(path.join(ROOT, 'public'), { maxAge: 0 }));
   return app;
@@ -63,8 +81,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(`\n  술술 서버가 실행되었습니다: http://localhost:${PORT}`);
     console.log(
       identifier
-        ? `  사진으로 술 알아보기: 켜짐 (${identifier.model})\n`
-        : '  사진으로 술 알아보기: 꺼짐 — .env 에 ANTHROPIC_API_KEY 를 넣으면 켜져요 (README 참고)\n',
+        ? `  사진으로 술 알아보기: 서버 AI 켜짐 (${identifier.model})\n`
+        : '  사진으로 술 알아보기: 기기 안 분석 (무료, 브라우저에서 글자·바코드 인식). 서버 AI 는 README 참고\n',
     );
   });
   server.on('error', (err) => {
