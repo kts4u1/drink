@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://nominatim.openstreetmap.org; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>술술 · 술 백과와 내 주변 최저가</title>
+  <meta name="description" content="와인·위스키·막걸리까지 술을 쉽게 알려주고, 내 주변 술 파는 곳과 소주·맥주·막걸리 최저가를 보여주는 앱.">
+  <meta name="theme-color" content="#9f1239">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="brand" href="#guide" aria-label="술술 홈">
+        <img src="icons/icon.svg" alt="" width="30" height="30">
+        <span>술술</span>
+      </a>
+      <button type="button" class="loc-chip" id="locButton" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.6"/></svg>
+        <span id="locLabel">위치 확인 중…</span>
+        <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="화면 선택">
+      <button type="button" role="tab" id="tab-guide" data-tab="guide" aria-controls="view-guide" aria-selected="true">술 백과</button>
+      <button type="button" role="tab" id="tab-find" data-tab="find" aria-controls="view-find" aria-selected="false">술 찾기</button>
+      <button type="button" role="tab" id="tab-nearby" data-tab="nearby" aria-controls="view-nearby" aria-selected="false">내 주변</button>
+      <button type="button" role="tab" id="tab-prices" data-tab="prices" aria-controls="view-prices" aria-selected="false">최저가</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- 술 백과 (js/view-guide.js 가 그림) -->
+    <section class="view" id="view-guide" role="tabpanel" aria-labelledby="tab-guide"></section>
+
+    <!-- 술 찾기 -->
+    <section class="view" id="view-find" role="tabpanel" aria-labelledby="tab-find" hidden>
+      <h1 class="view-title">🔎 술 찾기</h1>
+      <p class="view-lead">이름으로 찾으면 맛, 참고 가격, 어디서 사면 좋은지, 내 주변 살 곳까지 알려드려요.</p>
+      <div class="panel filters">
+        <label class="searchbar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span class="sr-only">술 이름 검색</span>
+          <input type="search" id="findSearch" placeholder="예) 발베니, 하이볼, 모스카토, 복순도가" autocomplete="off">
+        </label>
+        <div class="chip-row" id="findPopular" role="group" aria-label="많이 찾는 검색어"></div>
+        <div class="chip-row" id="findCats" role="group" aria-label="술 종류"></div>
+        <div class="toolbar">
+          <label class="select">
+            <span class="sr-only">정렬</span>
+            <select id="findSort">
+              <option value="recommend">추천순</option>
+              <option value="low">가격 낮은 순</option>
+              <option value="high">가격 높은 순</option>
+              <option value="name">이름순</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="findRelated" style="margin-top:12px"></div>
+      <div class="summary" id="findSummary" aria-live="polite"></div>
+      <div class="card-list" id="findList"></div>
+      <button type="button" class="more-button" id="findMore" hidden>더 보기</button>
+    </section>
+
+    <!-- 내 주변 -->
+    <section class="view" id="view-nearby" role="tabpanel" aria-labelledby="tab-nearby" hidden>
+      <div class="panel filters">
+        <div class="chip-row" id="nearKinds" role="group" aria-label="매장 종류"></div>
+        <div class="filter-label">반경</div>
+        <div class="radius-group" id="nearRadius" role="group" aria-label="반경 선택"></div>
+        <div class="toolbar">
+          <label class="select">
+            <span class="sr-only">정렬</span>
+            <select id="nearSort">
+              <option value="distance">가까운 순</option>
+              <option value="cheap">싸게 사기 좋은 순</option>
+              <option value="variety">종류 많은 순</option>
+            </select>
+          </label>
+          <div class="segmented" id="nearViewToggle" role="group" aria-label="보기 방식">
+            <button type="button" data-view="list" aria-pressed="true">목록</button>
+            <button type="button" data-view="map" aria-pressed="false">지도</button>
+          </div>
+        </div>
+      </div>
+      <div class="summary" id="nearSummary" aria-live="polite"></div>
+      <div class="notice" id="nearNotice" hidden></div>
+      <div class="card-list" id="nearList"></div>
+      <div class="map-wrap" id="nearMapWrap" hidden>
+        <div class="map" id="nearMap"></div>
+        <p class="map-hint">지도를 누르면 그 위치를 기준으로 다시 찾을 수 있어요.</p>
+      </div>
+      <button type="button" class="more-button" id="nearMore" hidden>더 보기</button>
+      <div class="more-search" id="nearMoreSearch"></div>
+      <p class="data-line" id="nearDataLine"></p>
+    </section>
+
+    <!-- 최저가 -->
+    <section class="view" id="view-prices" role="tabpanel" aria-labelledby="tab-prices" hidden>
+      <h1 class="view-title">💸 내 주변 최저가</h1>
+      <p class="view-lead">한국소비자원 참가격이 매주 조사한 실제 판매 가격이에요. 소주·맥주·막걸리를 어디서 사면 싼지 비교해 보세요.</p>
+      <div class="panel filters">
+        <div class="chip-row" id="priceKinds" role="group" aria-label="술 종류"></div>
+        <div class="chip-row product-chips" id="priceProducts" role="group" aria-label="상품"></div>
+        <div class="filter-label">반경</div>
+        <div class="radius-group" id="priceRadius" role="group" aria-label="반경 선택"></div>
+        <div class="segmented wide" id="priceSortToggle" role="group" aria-label="정렬">
+          <button type="button" data-sort="price" aria-pressed="true">싼 순</button>
+          <button type="button" data-sort="distance" aria-pressed="false">가까운 순</button>
+        </div>
+      </div>
+      <div id="priceHero"></div>
+      <div class="notice" id="priceNotice" hidden></div>
+      <div class="price-list" id="priceList"></div>
+      <button type="button" class="more-button" id="priceMore" hidden>더 보기</button>
+      <div class="cvs-box" id="priceCvs" hidden></div>
+      <p class="data-line" id="priceDataLine"></p>
+      <div class="block">
+        <h2>와인·위스키는요?</h2>
+        <p class="lead" style="margin:0 0 10px">와인·위스키는 공공 가격 조사 자료가 없어요. 대신 제품별 참고 가격대와 싸게 살 수 있는 곳을 알려드려요.</p>
+        <div class="link-grid">
+          <a class="primary" href="#find">🔎 술 찾기에서 참고 가격 보기</a>
+          <a href="#guide/buy">💸 싸게 사는 법</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div class="warn-line">지나친 음주는 건강을 해쳐요 · 19세 미만 판매 금지 · 음주운전은 범죄예요</div>
+    매장 위치: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자 · 가격: 한국소비자원 참가격 · 참고 가격은 대략적인 범위예요
+  </footer>
+
+  <!-- 나이 확인 -->
+  <dialog class="sheet age-sheet" id="ageDialog" aria-labelledby="ageTitle" data-locked>
+    <div class="age-body">
+      <div class="em" aria-hidden="true">🍷</div>
+      <h2 id="ageTitle">만 19세 이상인가요?</h2>
+      <p>술술은 술 정보와 판매처를 알려주는 앱이라<br>만 19세 이상만 이용할 수 있어요.</p>
+      <div class="row">
+        <button type="button" class="primary-button" data-adult="yes" autofocus>네, 만 19세 이상이에요</button>
+        <button type="button" class="secondary" data-adult="no">아니요</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 기준 위치 (어디갈까 앱의 안내 화면) -->
+  <dialog class="sheet loc-sheet" id="locationDialog" aria-labelledby="locationDialogTitle" data-mode="change" data-status="idle">
+    <button type="button" class="icon-button floating-close loc-close" data-close aria-label="닫기">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="loc-hero" aria-hidden="true">
+      <svg class="loc-art" viewBox="0 0 360 190" preserveAspectRatio="xMidYMid slice">
+        <g fill="none" stroke="#fff" stroke-linecap="round">
+          <path d="M-10 152C80 118 140 172 220 132S330 92 380 112" stroke-opacity=".10" stroke-width="16"/>
+          <path d="M44-10 112 200" stroke-opacity=".09" stroke-width="6"/>
+          <path d="M-10 58 380 28" stroke-opacity=".08" stroke-width="5"/>
+          <path d="M262-10 300 200" stroke-opacity=".08" stroke-width="5"/>
+          <path d="M-10 98H380M180-10V200" stroke-opacity=".05" stroke-width="2"/>
+          <path d="M0 176 360 160" stroke-opacity=".06" stroke-width="3"/>
+        </g>
+        <g fill="none" stroke="#fff" stroke-width="1.5">
+          <circle cx="180" cy="112" r="34" stroke-opacity=".5"/>
+          <circle cx="180" cy="112" r="64" stroke-opacity=".32" stroke-dasharray="4 5"/>
+          <circle cx="180" cy="112" r="96" stroke-opacity=".2" stroke-dasharray="2 6"/>
+        </g>
+        <circle class="pulse" cx="180" cy="112" r="96" fill="#fda4af" fill-opacity=".3"/>
+        <circle class="pulse p2" cx="180" cy="112" r="96" fill="#fda4af" fill-opacity=".3"/>
+        <ellipse class="pin-shadow" cx="180" cy="113" rx="12" ry="3.5" fill="#4c0519" fill-opacity=".35"/>
+        <g class="pin">
+          <path d="M180 112s-22-20-22-37a22 22 0 0 1 44 0c0 17-22 37-22 37Z" fill="#fff"/>
+          <circle cx="180" cy="75" r="8.5" fill="#9f1239"/>
+        </g>
+      </svg>
+      <span class="loc-float f1">🍷</span>
+      <span class="loc-float f2">🥃</span>
+      <span class="loc-float f3">🍺</span>
+      <span class="loc-float f4">🍶</span>
+      <span class="loc-float f5">🛒</span>
+    </div>
+    <div class="loc-body">
+      <h2 class="loc-title" id="locationDialogTitle" tabindex="-1" autofocus>기준 위치</h2>
+      <p class="loc-lead" id="locLead"></p>
+      <ul class="loc-perks">
+        <li><span class="perk-ic">🍾</span><span>근처 <b>와인샵·마트·백화점·양조장</b>을 가까운 순으로</span></li>
+        <li><span class="perk-ic">💸</span><span><b>소주·맥주·막걸리</b> 어디가 제일 싼지 실제 가격으로</span></li>
+        <li><span class="perk-ic">🔒</span><span>위치는 <b>이 기기에만</b> 저장돼요</span></li>
+      </ul>
+      <button type="button" class="loc-gps" id="useGpsButton">
+        <span class="loc-gps-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.6 20 3.8l-6.8 16.5-2.1-7.6Z"/></svg></span>
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="gpsLabel">현재 위치로 찾기</span>
+      </button>
+      <p class="loc-ask" id="gpsAsk">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/></svg>
+        <span>브라우저가 위치 사용을 물어보면 <b>허용</b>을 눌러 주세요</span>
+      </p>
+      <div class="loc-help" id="gpsHelp" hidden>
+        <h3>위치 권한 켜는 방법</h3>
+        <ol id="gpsHelpSteps"></ol>
+      </div>
+      <p class="loc-msg" id="gpsHint" role="status"></p>
+      <div class="loc-alt">
+        <button type="button" class="loc-toggle" id="toggleCities" aria-expanded="false" aria-controls="cityPanel">
+          도시 고르기
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <button type="button" class="loc-later" id="locLater">나중에 할게요</button>
+      </div>
+      <div class="loc-cities" id="cityPanel">
+        <h3 class="sheet-subtitle">도시로 정하기</h3>
+        <div class="city-grid" id="cityGrid"></div>
+        <p class="hint">내 주변 › 지도 보기에서 지도를 눌러 원하는 곳을 기준으로 정할 수도 있어요.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 제품·매장 상세 -->
+  <dialog class="sheet detail-sheet" id="sheet" aria-labelledby="sheetTitle">
+    <button type="button" class="icon-button floating-close" data-close aria-label="닫기">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div id="sheetBody"></div>
+  </dialog>
+
+  <div class="loc-nudge" id="locNudge" role="status" hidden>
+    <span class="loc-nudge-dot" aria-hidden="true"></span>
+    <span class="loc-nudge-text" id="nudgeText"></span>
+    <button type="button" class="loc-nudge-go" id="nudgeGps">지금 위치로</button>
+    <button type="button" class="loc-nudge-close" id="nudgeClose" aria-label="닫기">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

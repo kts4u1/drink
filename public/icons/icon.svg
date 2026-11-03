@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#be123c"/>
+      <stop offset=".55" stop-color="#881337"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <!-- 와인잔 -->
+  <path d="M19 13h20c0 11-3.6 17.5-10 18.6V45h6.5a1.5 1.5 0 0 1 0 3h-16a1.5 1.5 0 0 1 0-3H26V31.6C19.6 30.5 19 24 19 13Z" fill="#fff"/>
+  <path d="M21.2 20h15.6c-.6 5.6-3.3 8.8-7.8 8.8s-7.2-3.2-7.8-8.8Z" fill="#fb7185"/>
+  <!-- 기준 위치 핀 -->
+  <path d="M47 55s-7-6.3-7-11.7a7 7 0 0 1 14 0C54 48.7 47 55 47 55Z" fill="#fde68a"/>
+  <circle cx="47" cy="43.2" r="2.6" fill="#881337"/>
+</svg>

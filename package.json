@@ -1,0 +1,21 @@
+{
+  "name": "sulsul",
+  "version": "0.1.0",
+  "private": true,
+  "description": "술 백과 · 내 주변 술 파는 곳 · 소주·맥주·막걸리 최저가를 한 번에 보여 주는 웹앱",
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "data:update": "node scripts/update-data.js",
+    "build": "node scripts/build.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "leaflet": "^1.9.4"
+  }
+}

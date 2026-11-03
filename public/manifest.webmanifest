@@ -1,0 +1,17 @@
+{
+  "name": "술술 - 술 백과와 내 주변 최저가",
+  "short_name": "술술",
+  "description": "와인·위스키·막걸리를 쉽게 알려주고, 내 주변 술 파는 곳과 소주·맥주·막걸리 최저가를 보여주는 앱",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3f2",
+  "theme_color": "#9f1239",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

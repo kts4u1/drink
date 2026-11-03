@@ -1,0 +1,215 @@
+// 술을 사는 곳 (매장 종류와 구매 채널), 술 종류별 추천 구매처
+
+/** 내 주변 지도에 나오는 매장 종류 (data/stores.json 의 k 값) */
+export const STORE_KINDS = {
+  shop: {
+    name: '주류 전문점',
+    short: '전문점',
+    emoji: '🍾',
+    desc: '와인샵·보틀샵·주류 할인점·전통주 가게',
+    good: '와인·위스키·전통주 종류가 가장 많고, 직원에게 취향을 말하면 골라줘요. 할인점은 인기 제품이 싸요.',
+    caution: '이름이 "OO주류(상사)"인 곳은 식당에 납품하는 도매상일 수 있어요. 가기 전에 개인 구매가 되는지 전화로 확인하세요.',
+    cheap: 3,
+    variety: 5,
+    search: ['와인샵', '보틀샵', '주류 할인점'],
+  },
+  warehouse: {
+    name: '창고형 마트',
+    short: '창고형',
+    emoji: '📦',
+    desc: '트레이더스·코스트코·롯데마트 맥스',
+    good: '인기 위스키·와인·맥주를 가장 싸게 살 수 있는 편이에요. 큰 용량(1L, 묶음)이 많아요.',
+    caution: '코스트코는 유료 회원만 들어갈 수 있어요. 인기 위스키는 입고 날 금방 팔려요.',
+    cheap: 5,
+    variety: 3,
+    search: ['트레이더스', '코스트코'],
+  },
+  mart: {
+    name: '대형마트',
+    short: '대형마트',
+    emoji: '🛒',
+    desc: '이마트·롯데마트·홈플러스·하나로마트',
+    good: '맥주·소주 묶음이 싸고, 와인·위스키는 행사 기간에 크게 할인해요. 하나로마트는 지역 막걸리·전통주가 많아요.',
+    caution: '한 달에 두 번 의무 휴업일이 있어요. 요일은 지역마다 달라요(일요일 또는 평일).',
+    cheap: 4,
+    variety: 3,
+    search: ['대형마트'],
+  },
+  super: {
+    name: '동네 슈퍼(SSM)',
+    short: 'SSM',
+    emoji: '🧺',
+    desc: '롯데슈퍼·GS더프레시·이마트에브리데이·홈플러스 익스프레스',
+    good: '소주·맥주·막걸리를 편의점보다 싸게 살 수 있어요. 기본 와인도 있어요.',
+    cheap: 4,
+    variety: 2,
+    search: ['슈퍼마켓'],
+  },
+  department: {
+    name: '백화점',
+    short: '백화점',
+    emoji: '🏬',
+    desc: '롯데·현대·신세계·갤러리아 등 식품관 와인·주류 코너',
+    good: '고급 와인·위스키·한정판·전통주 선물 세트가 많고 포장이 좋아요. 카드·상품권 할인, 명절 행사를 노리세요.',
+    cheap: 2,
+    variety: 4,
+    search: ['백화점 와인'],
+  },
+  brewery: {
+    name: '양조장·와이너리',
+    short: '양조장',
+    emoji: '🏺',
+    desc: '막걸리 양조장·브루어리·와이너리·증류소',
+    good: '만든 곳에서 맛보고 살 수 있어요. 갓 만든 술을 살 수 있고 견학·체험도 해요.',
+    caution: '견학·시음은 예약제인 곳이 많아요. 방문 전에 확인하세요.',
+    cheap: 3,
+    variety: 2,
+    search: ['양조장', '브루어리'],
+  },
+};
+
+export const STORE_KIND_ORDER = ['shop', 'warehouse', 'mart', 'super', 'department', 'brewery'];
+
+/** 구매 채널 (매장 + 온라인·면세점). 싸게 사는 법 화면과 제품 화면에 쓰입니다 */
+export const CHANNELS = {
+  warehouse: { ...STORE_KINDS.warehouse, kind: 'warehouse' },
+  mart: { ...STORE_KINDS.mart, kind: 'mart' },
+  super: { ...STORE_KINDS.super, kind: 'super' },
+  shop: { ...STORE_KINDS.shop, kind: 'shop' },
+  department: { ...STORE_KINDS.department, kind: 'department' },
+  brewery: { ...STORE_KINDS.brewery, kind: 'brewery' },
+  smartorder: {
+    name: '편의점·주류 앱 스마트오더',
+    short: '앱 주문',
+    emoji: '📱',
+    desc: '앱으로 주문·결제하고 가까운 매장에서 받기',
+    good: '편의점 앱(GS25 "우리동네GS"의 와인25플러스, CU "포켓CU", 세븐일레븐·이마트24 앱)이나 주류 픽업 앱(데일리샷 등)에서 주문하면, 매장 진열가보다 싼 앱 전용가가 많아요. 매장에 없는 와인·위스키도 골라 받을 수 있어요.',
+    caution: '받을 때 신분증으로 나이를 확인해요. 픽업 매장과 날짜를 꼭 확인하세요.',
+    cheap: 4,
+    variety: 4,
+  },
+  convenience: {
+    name: '편의점 (매장)',
+    short: '편의점',
+    emoji: '🏪',
+    desc: 'GS25·CU·세븐일레븐·이마트24',
+    good: '가깝고 24시간. 수입 맥주 묶음 할인, 와인 행사가 있어요.',
+    caution: '소주·맥주 낱개 가격은 마트·SSM보다 비싼 편이에요.',
+    cheap: 2,
+    variety: 2,
+  },
+  online: {
+    name: '온라인 (전통주만 택배)',
+    short: '온라인',
+    emoji: '📦',
+    desc: '전통주 쇼핑몰, 양조장 온라인몰',
+    good: '법에서 정한 전통주(민속주·지역특산주)는 인터넷으로 사서 집에서 받을 수 있어요.',
+    caution: '와인·위스키·맥주 등 다른 술은 택배 판매가 안 돼요(스마트오더로 매장에서 받기는 가능).',
+    cheap: 3,
+    variety: 4,
+  },
+  dutyfree: {
+    name: '면세점 (해외여행 때)',
+    short: '면세점',
+    emoji: '✈️',
+    desc: '공항·시내·인터넷 면세점',
+    good: '위스키·코냑 같은 고급 증류주를 세금 없이 살 수 있어 인기 제품이 싼 경우가 많아요.',
+    caution: '술은 1인당 2병, 합계 2L 이하, 미화 400달러 이하까지 면세예요. 넘으면 세금을 내야 해요. 시내·인터넷 면세점에서 사면 출국할 때 공항에서 받아요.',
+    cheap: 4,
+    variety: 3,
+  },
+};
+
+/**
+ * 술 종류별로 사기 좋은 곳 (score 1~5). 앞쪽일수록 추천
+ * why: 그 술을 거기서 사면 좋은 이유
+ */
+export const BUY_BY_CATEGORY = {
+  wine: [
+    { ch: 'shop', score: 5, why: '종류가 가장 많고 취향을 말하면 골라줘요. 묶음 할인도 해요.' },
+    { ch: 'warehouse', score: 5, why: '인기 와인·샴페인이 싸요. 큰 행사 때 더 싸져요.' },
+    { ch: 'mart', score: 4, why: '봄·가을 대규모 와인 행사 때 크게 할인해요. 마트 전용 데일리 와인도 싸요.' },
+    { ch: 'smartorder', score: 4, why: '편의점 앱 전용가가 싸고, 가까운 편의점에서 받아요.' },
+    { ch: 'department', score: 3, why: '고급 와인·선물 포장. 가격은 높은 편.' },
+  ],
+  whisky: [
+    { ch: 'warehouse', score: 5, why: '인기 위스키(조니워커·발렌타인·글렌피딕 등)가 가장 싼 편이에요.' },
+    { ch: 'shop', score: 5, why: '싱글 몰트·한정판·소용량 등 종류가 많아요.' },
+    { ch: 'dutyfree', score: 4, why: '해외여행 갈 때 고급 위스키를 세금 없이 (1인 2병·2L·400달러).' },
+    { ch: 'mart', score: 4, why: '명절·연말 행사 때 할인. 하이볼용 위스키는 늘 있어요.' },
+    { ch: 'smartorder', score: 4, why: '앱으로 원하는 위스키를 주문해 편의점에서 받아요.' },
+    { ch: 'department', score: 3, why: '고숙성·한정판, 선물용.' },
+  ],
+  brandy: [
+    { ch: 'dutyfree', score: 5, why: '코냑은 면세점 가격 차이가 큰 편이에요.' },
+    { ch: 'warehouse', score: 4, why: 'VSOP급 인기 코냑을 싸게.' },
+    { ch: 'department', score: 4, why: 'XO 등 선물용 고급 코냑.' },
+    { ch: 'shop', score: 4, why: '아르마냑·칼바도스 등 다양한 브랜디.' },
+  ],
+  vodka: [
+    { ch: 'mart', score: 5, why: '칵테일용 보드카는 마트에 늘 있고 싸요.' },
+    { ch: 'warehouse', score: 4, why: '1L 큰 병이 싸요.' },
+    { ch: 'shop', score: 3, why: '프리미엄·플레이버드 보드카.' },
+    { ch: 'smartorder', score: 3, why: '앱으로 주문해 편의점에서.' },
+  ],
+  gin: [
+    { ch: 'shop', score: 5, why: '크래프트 진 종류가 많아요.' },
+    { ch: 'mart', score: 4, why: '봄베이·탱커레이 같은 기본 진.' },
+    { ch: 'warehouse', score: 4, why: '인기 진을 싸게.' },
+    { ch: 'smartorder', score: 3, why: '앱 주문 후 편의점 픽업.' },
+  ],
+  rum: [
+    { ch: 'mart', score: 5, why: '칵테일용 화이트·스파이스드 럼.' },
+    { ch: 'warehouse', score: 4, why: '큰 병이 싸요.' },
+    { ch: 'shop', score: 4, why: '오래 숙성한 다크 럼.' },
+  ],
+  tequila: [
+    { ch: 'shop', score: 5, why: '100% 아가베 데킬라·메스칼 종류가 많아요.' },
+    { ch: 'mart', score: 4, why: '칵테일용 기본 데킬라.' },
+    { ch: 'warehouse', score: 4, why: '인기 데킬라를 싸게.' },
+  ],
+  liqueur: [
+    { ch: 'mart', score: 5, why: '베일리스·깔루아·예거마이스터 등 인기 리큐르는 마트에 다 있어요.' },
+    { ch: 'shop', score: 4, why: '칵테일용 리큐르 종류가 많아요.' },
+    { ch: 'warehouse', score: 3, why: '인기 리큐르 큰 병.' },
+  ],
+  cocktail: [
+    { ch: 'mart', score: 5, why: '술·탄산수·토닉·주스를 한 번에.' },
+    { ch: 'shop', score: 4, why: '칵테일 재료용 리큐르·비터스.' },
+    { ch: 'smartorder', score: 3, why: '하이볼용 위스키를 편의점에서 받기.' },
+  ],
+  beer: [
+    { ch: 'mart', score: 5, why: '국산 맥주 묶음(6캔·12캔)이 가장 싸요.' },
+    { ch: 'super', score: 4, why: '가까운 곳에서 편의점보다 싸게.' },
+    { ch: 'warehouse', score: 4, why: '수입 맥주 대용량 박스.' },
+    { ch: 'convenience', score: 3, why: '수입 맥주 묶음 할인.' },
+    { ch: 'shop', score: 3, why: '크래프트·수입 맥주 보틀샵.' },
+    { ch: 'brewery', score: 3, why: '브루어리에서 신선한 크래프트 맥주.' },
+  ],
+  sake: [
+    { ch: 'shop', score: 5, why: '긴조·다이긴조 등 종류가 많고 보관 상태가 좋아요.' },
+    { ch: 'department', score: 4, why: '유명 사케와 선물용.' },
+    { ch: 'mart', score: 3, why: '대중적인 사케 몇 종.' },
+    { ch: 'smartorder', score: 3, why: '앱으로 주문해 매장에서 받기.' },
+  ],
+  traditional: [
+    { ch: 'mart', score: 5, why: '하나로마트는 지역 막걸리·전통주가 특히 많아요.' },
+    { ch: 'online', score: 5, why: '법적 전통주는 택배로 받을 수 있어요.' },
+    { ch: 'brewery', score: 5, why: '양조장에서 직접 맛보고 사기.' },
+    { ch: 'shop', score: 4, why: '전통주 보틀샵에 전국 프리미엄 막걸리·증류주.' },
+    { ch: 'department', score: 4, why: '전통주 선물 세트.' },
+    { ch: 'super', score: 3, why: '대중 막걸리는 가까운 슈퍼에서 싸게.' },
+  ],
+  soju: [
+    { ch: 'mart', score: 5, why: '병당 가장 싸요 (참가격 조사 기준).' },
+    { ch: 'super', score: 5, why: '마트 못지않게 싸고 가까워요.' },
+    { ch: 'convenience', score: 3, why: '24시간이지만 병당 300~600원 더 비싼 편.' },
+    { ch: 'shop', score: 3, why: '증류식 소주·지역 소주.' },
+  ],
+  baijiu: [
+    { ch: 'mart', score: 4, why: '연태고량주 등 대중 백주.' },
+    { ch: 'shop', score: 4, why: '다양한 백주.' },
+    { ch: 'dutyfree', score: 4, why: '고급 백주는 면세점이 유리.' },
+    { ch: 'department', score: 3, why: '선물용 고급 백주.' },
+  ],
+};

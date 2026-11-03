@@ -1,0 +1,72 @@
+# GitHub Pages 배포
+# - 기본 브랜치에 push 하면: 테스트 → 최신 데이터 받기 → GitHub Pages 에 배포
+# - 매일 새벽 자동 실행: 참가격(매주 금요일 조사)과 매장 위치를 새로 받아 다시 배포
+# - Actions 탭에서 "Run workflow" 로 직접 실행도 가능
+#
+# 처음 한 번: 저장소 Settings › Pages › Build and deployment › Source 를 "GitHub Actions" 로 바꾸세요.
+# API 키나 Secrets 는 필요 없어요.
+name: GitHub Pages 배포
+
+on:
+  push:
+  schedule:
+    - cron: '23 21 * * *' # 매일 한국 시간 새벽 6시 23분 (세일레이더가 참가격을 받은 뒤)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build:
+    needs: test
+    # push 는 기본 브랜치일 때만 배포 (예약 실행·직접 실행은 기본 브랜치에서 돎)
+    if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # 받다가 실패해도 저장소에 들어 있는 데이터로 배포해요
+      - name: 최신 데이터 받기 (참가격 술 가격 · OpenStreetMap 매장)
+        run: npm run data:update
+        continue-on-error: true
+
+      - name: dist/ 만들기
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
