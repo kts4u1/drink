@@ -30,7 +30,8 @@ export const SHOP_WORDS = {
   baijiu: '중국 식품',
 };
 
-function open(html, color) {
+/** 바텀시트 열기 (다른 화면에서도 씀). 돌려준 번호로 그 사이 다른 내용이 열렸는지 확인 */
+export function openSheet(html, color) {
   const d = dialog();
   body().innerHTML = html;
   d.style.setProperty('--c', color || 'var(--brand)');
@@ -39,7 +40,8 @@ function open(html, color) {
   return ++token;
 }
 
-const current = (t) => t === token && dialog().open;
+export const sheetIsCurrent = (t) => t === token && dialog().open;
+const current = sheetIsCurrent;
 
 export function initSheets() {
   // 시트 안의 앱 내부 링크(#guide/wine 등)를 누르면 시트를 닫고 이동
@@ -141,12 +143,13 @@ export async function openProduct(product) {
         <p class="note">참고 가격은 국내 마트·전문점 기준의 대략적인 범위예요. 매장·행사·시기마다 크게 달라요. 재고는 매장에 전화로 확인하세요.</p>
       </div>
     </div>`;
-  const t = open(html, color);
+  const t = openSheet(html, color);
   fillProductNearby(product, channels, t);
   if (product.kca) fillProductKca(product, t);
 }
 
-async function fillProductNearby(product, channels, t) {
+/** 구매처 카드 안에 가장 가까운 매장, 지도 앱 검색 링크에 동네 이름 채우기 (product 는 cat 만 있으면 됨) */
+export async function fillProductNearby(product, channels, t) {
   const loc = state.location;
   if (!loc) return;
   try {
@@ -173,7 +176,7 @@ async function fillProductNearby(product, channels, t) {
   if (n) n.href = links.naver;
 }
 
-async function fillProductKca(product, t) {
+export async function fillProductKca(product, t) {
   const loc = state.location;
   const box = () => document.getElementById('sheetKca');
   try {
@@ -243,7 +246,7 @@ export async function openStore(store) {
       <div id="sheetStorePrices"></div>
       <p class="note">매장 정보: © OpenStreetMap 기여자${store.c ? ' · 가격: 한국소비자원 참가격' : ''}. 영업시간·휴무는 바뀔 수 있으니 지도 앱에서 한 번 더 확인하세요.</p>
     </div>`;
-  const t = open(html);
+  const t = openSheet(html);
   if (store.c) {
     try {
       const prices = await loadPrices();

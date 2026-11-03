@@ -1,10 +1,16 @@
-# GitHub Pages 배포
-# - 기본 브랜치에 push 하면: 테스트 → 최신 데이터 받기 → GitHub Pages 에 배포
-# - 매일 새벽 자동 실행: 참가격(매주 금요일 조사)과 매장 위치를 새로 받아 다시 배포
-# - Actions 탭에서 "Run workflow" 로 직접 실행도 가능
+# 배포
+# - 화면: GitHub Pages (https://kts4u1.github.io/drink/)
+# - 사진으로 술 알아보기 API: Cloudflare Worker (Secrets 가 있을 때만)
 #
-# 처음 한 번: 저장소 Settings › Pages › Build and deployment › Source 를 "GitHub Actions" 로 바꾸세요.
-# API 키나 Secrets 는 필요 없어요.
+# 기본 브랜치에 push 하거나, 매일 새벽 자동으로, 또는 Actions 탭 "Run workflow" 로 실행돼요.
+#
+# 필요한 설정
+#   Settings › Pages › Source = GitHub Actions                       (화면, 필수)
+#   Settings › Secrets and variables › Actions › New repository secret  (사진 인식, 선택)
+#     ANTHROPIC_API_KEY       Anthropic API 키
+#     CLOUDFLARE_API_TOKEN    Cloudflare API 토큰 ("Edit Cloudflare Workers" 템플릿)
+#     CLOUDFLARE_ACCOUNT_ID   Cloudflare 계정 ID
+# Secrets 가 없으면 사진 인식 없이 화면만 배포해요.
 name: GitHub Pages 배포
 
 on:
@@ -34,12 +40,65 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  build:
+  api:
     needs: test
     # push 는 기본 브랜치일 때만 배포 (예약 실행·직접 실행은 기본 브랜치에서 돎)
     if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - name: 설정 확인
+        id: check
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            if [ -z "$ANTHROPIC_API_KEY" ]; then
+              echo "::warning::ANTHROPIC_API_KEY 가 없어서 Worker 는 배포하지만 사진 인식은 꺼져 있어요."
+            fi
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN·CLOUDFLARE_ACCOUNT_ID 가 없어서 사진 인식 API 는 건너뛰고 화면만 배포해요. (README 의 '사진으로 술 알아보기 켜기' 참고)"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.check.outputs.ok == 'true'
+      - uses: actions/setup-node@v5
+        if: steps.check.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.check.outputs.ok == 'true'
+      - name: 결과 저장소(KV) 준비
+        if: steps.check.outputs.ok == 'true'
+        run: node scripts/ensure-kv.js
+      - name: Cloudflare Worker 배포
+        id: deploy
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          npx wrangler deploy 2>&1 | tee deploy.log
+          url=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "사진 인식 API: $url"
+      - name: Worker 에 Anthropic API 키 저장
+        if: steps.check.outputs.ok == 'true' && env.ANTHROPIC_API_KEY != ''
+        run: printf '%s' "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY
+
+  build:
+    needs: [test, api]
+    # 사진 인식 API 배포가 실패해도 화면은 배포
+    if: ${{ !cancelled() && needs.test.result == 'success' && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Worker 주소 (배포에서 받은 값, 없으면 저장소 변수 API_BASE)
+      API_BASE: ${{ needs.api.outputs.url || vars.API_BASE }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -63,6 +122,7 @@ jobs:
 
   deploy:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

@@ -1,10 +1,11 @@
 // 서비스워커: 최신 화면을 우선 보여주고(network-first), 오프라인일 때만 저장된 화면을 사용합니다.
 // GitHub Pages 처럼 하위 경로(/drink/)에서도 동작하도록 모든 주소를 상대 경로로 씁니다.
-const CACHE = 'sulsul-v1';
+const CACHE = 'sulsul-v2';
 const SHELL = [
   './',
   'styles.css',
   'manifest.webmanifest',
+  'config.json',
   'icons/icon.svg',
   'vendor/leaflet/leaflet.css',
   'js/app.js',
@@ -15,6 +16,7 @@ const SHELL = [
   'js/place.js',
   'js/render.js',
   'js/sheets.js',
+  'js/snap.js',
   'js/state.js',
   'js/util.js',
   'js/view-find.js',
@@ -22,6 +24,7 @@ const SHELL = [
   'js/view-nearby.js',
   'js/view-prices.js',
   'js/lib/geo.js',
+  'js/lib/identify.js',
   'js/lib/nearby.js',
   'js/lib/quiz.js',
   'js/lib/search.js',

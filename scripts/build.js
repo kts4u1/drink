@@ -31,6 +31,11 @@ async function main() {
   await fs.cp(path.join(leaflet, 'leaflet.css'), path.join(vendor, 'leaflet.css'));
   await fs.cp(path.join(leaflet, 'images'), path.join(vendor, 'images'), { recursive: true });
 
+  // 사진 인식 API 주소 (Cloudflare Worker). 비어 있으면 같은 주소의 /api 를 씀 (개발 서버)
+  const apiBase = String(process.env.API_BASE || '').trim().replace(/\/+$/, '');
+  if (apiBase && !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(apiBase)) throw new Error(`API_BASE 형식이 올바르지 않아요: ${apiBase}`);
+  await fs.writeFile(path.join(DIST, 'config.json'), `${JSON.stringify({ apiBase })}\n`);
+
   // GitHub Pages 가 밑줄로 시작하는 파일을 숨기지 않도록
   await fs.writeFile(path.join(DIST, '.nojekyll'), '');
 
@@ -42,7 +47,7 @@ async function main() {
   const sw = await fs.readFile(swPath, 'utf8');
   await fs.writeFile(swPath, sw.replace(/const CACHE = 'sulsul-v(\d+)';/, `const CACHE = 'sulsul-v$1-${stamp}';`));
 
-  console.log(`dist/ 완료 (참가격 ${prices.inspectDay}, 매장 ${stores.count}곳)`);
+  console.log(`dist/ 완료 (참가격 ${prices.inspectDay}, 매장 ${stores.count}곳, 사진 인식 API: ${apiBase || '없음'})`);
 }
 
 main().catch((err) => {

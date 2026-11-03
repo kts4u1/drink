@@ -54,6 +54,11 @@ function render() {
   renderCats(counts, total);
   els.sort.value = prefs.sort;
 
+  // 목록에 없는 술도 많으니 검색어가 있으면 늘 AI 에게 물어볼 수 있게
+  els.ask.innerHTML = query.length >= 2
+    ? `<button type="button" class="ask-ai" data-ask="${escapeHtml(query)}"><span aria-hidden="true">🤖</span><span><b>AI에게 "${escapeHtml(query)}" 물어보기</b><small>목록에 없는 와인·위스키·코냑도 이름·맛·가격·마시는 법을 알려줘요</small></span></button>`
+    : '';
+
   // 검색어에 맞는 백과 글·용어
   const related = query ? searchCategories(CATEGORIES, query).slice(0, 3) : [];
   const terms = query ? searchTerms(GLOSSARY, query).slice(0, 2) : [];
@@ -68,7 +73,7 @@ function render() {
   if (!list.length) {
     const links = mapSearchLinks('보틀샵');
     els.summary.innerHTML = query ? `<strong>"${escapeHtml(query)}"</strong> 검색 결과` : '';
-    els.list.innerHTML = `<div class="empty"><strong>목록에 없는 술이에요</strong>이 앱에는 대표 제품 ${PRODUCTS.length}개만 들어 있어요. 아래에서 가격과 파는 곳을 직접 찾아보세요.
+    els.list.innerHTML = `<div class="empty"><strong>대표 제품 목록에는 없어요</strong>위의 <b>AI에게 물어보기</b>를 누르거나, 아래에서 가격과 파는 곳을 직접 찾아보세요.
       <div class="link-grid" style="margin-top:14px">
         <a class="primary" href="https://search.naver.com/search.naver?query=${encodeURIComponent(`${query} 가격`)}" target="_blank" rel="noopener">네이버에서 가격 검색</a>
         <a href="${links.kakao}" target="_blank" rel="noopener">근처 보틀샵 (카카오맵)</a>
@@ -84,7 +89,7 @@ function render() {
 }
 
 export function initFind() {
-  for (const id of ['findSearch', 'findPopular', 'findCats', 'findSort', 'findRelated', 'findSummary', 'findList', 'findMore']) {
+  for (const id of ['findSearch', 'findPopular', 'findCats', 'findSort', 'findAsk', 'findRelated', 'findSummary', 'findList', 'findMore']) {
     els[id.replace('find', '').toLowerCase()] = document.getElementById(id);
   }
   els.popular.innerHTML = POPULAR.map((q) => `<button type="button" class="chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');

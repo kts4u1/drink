@@ -1,6 +1,7 @@
 // 앱 시작점: 나이 확인 → 탭·화면 준비 → 기준 위치
 import { initLocation, resolveInitialLocation } from './location.js';
 import { initSheets } from './sheets.js';
+import { initSnap } from './snap.js';
 import { onLocationChange, state } from './state.js';
 import { storage } from './util.js';
 import { initFind, showFind } from './view-find.js';
@@ -86,6 +87,7 @@ async function main() {
   initFind();
   initNearby();
   initPrices();
+  initSnap();
   initTabs();
   onLocationChange(refreshGuideNear);
 
@@ -93,6 +95,7 @@ async function main() {
     document.querySelector('main').innerHTML = '<div class="age-block"><div style="font-size:48px">🙅</div><h2>19세 미만은 이용할 수 없어요</h2><p class="muted">술은 만 19세 이상만 살 수 있어요.</p></div>';
     document.querySelector('.tabs').hidden = true;
     document.getElementById('locButton').hidden = true;
+    document.getElementById('snapQuick').hidden = true;
     return;
   }
 

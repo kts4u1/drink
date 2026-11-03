@@ -59,6 +59,7 @@ function renderHome() {
       <span class="hero-glasses" aria-hidden="true">🍷🥃🍶</span>
       <h1>술, 쉽게 알려드릴게요</h1>
       <p>종류·맛·마시는 법부터 어디서 싸게 사는지까지</p>
+      <a class="hero-snap" href="#find"><span aria-hidden="true">📷</span><span><b>모르는 술은 사진으로 알아보세요</b><small>라벨을 찍으면 AI가 이름·맛·가격·마시는 법을 알려줘요</small></span></a>
       <label class="searchbar">
         ${ICON.search}
         <span class="sr-only">술 이름·용어 검색</span>
@@ -94,7 +95,8 @@ function renderSearch(query) {
   const prods = searchProducts(PRODUCTS, lastQuery).slice(0, 8);
   const terms = searchTerms(GLOSSARY, lastQuery).slice(0, 6);
   if (!cats.length && !prods.length && !terms.length) {
-    box.innerHTML = `<div class="empty"><strong>"${escapeHtml(lastQuery)}"에 대한 내용이 아직 없어요</strong>다른 이름으로 찾거나 아래에서 직접 검색해 보세요.<br>
+    box.innerHTML = `<div class="empty"><strong>"${escapeHtml(lastQuery)}"에 대한 내용이 백과에는 없어요</strong>AI에게 물어보거나 직접 검색해 보세요.<br>
+      <button type="button" class="ask-ai" style="margin-top:12px" data-ask="${escapeHtml(lastQuery)}"><span aria-hidden="true">🤖</span><span><b>AI에게 "${escapeHtml(lastQuery)}" 물어보기</b></span></button>
       <a class="text-button" style="display:inline-block;margin-top:12px;text-decoration:none" href="https://search.naver.com/search.naver?query=${encodeURIComponent(lastQuery)}" target="_blank" rel="noopener">네이버에서 "${escapeHtml(lastQuery)}" 검색</a></div>`;
     return;
   }

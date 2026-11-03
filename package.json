@@ -15,7 +15,11 @@
     "build": "node scripts/build.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "express": "^5.1.0",
     "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "wrangler": "^4.156.2"
   }
 }
