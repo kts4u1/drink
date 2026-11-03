@@ -32,5 +32,5 @@ export function userText({ text, imageCount }) {
     const extra = text ? `\n사용자가 덧붙인 말: ${text}` : '';
     return `이 술병 사진 ${imageCount}장을 보고 어떤 술인지 알려 주세요.${extra}`;
   }
-  return `"${text}" 이(가) 어떤 술인지 알려 주세요.`;
+  return `"${text}" 이(가) 어떤 술인지 알려 주세요.\n이 이름의 술을 확실히 모르면 비슷한 이름으로 지어내지 말고 is_alcohol 을 false 로, not_alcohol_reason 에 "이 이름의 술 정보를 찾지 못했어요. 영어 이름이나 라벨에 적힌 이름 그대로 다시 적어 보세요."라고 적으세요.`;
 }

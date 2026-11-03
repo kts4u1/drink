@@ -367,6 +367,8 @@ function renderResult(result, { thumb, text, model: usedModel, cached, method = 
   if (!result.is_alcohol) {
     // 이름으로 물었으면 비슷한 브랜드를 골라 볼 수 있게
     const near = text ? searchBrands(BRANDS, text, 8) : [];
+    // 사진에서 글자는 읽었으면 그 글자로 물어볼 수 있게 ("Sengur ULTRA")
+    const read = !text ? cleanQueryText(String(result.label_text || '')).slice(0, 40) : '';
     const tips = text
       ? ['영어 이름(예: Glenfiddich)이나 브랜드 이름만 적어 보세요.', '라벨이 있으면 <b>사진</b>으로 찍어 보세요.']
       : ['라벨이 화면 가운데에 크게, 정면으로 오게 찍어 주세요.', '밝은 곳에서, 반사광이 라벨을 가리지 않게 해 주세요.', '뒷면의 <b>한글 수입사 스티커</b>도 같이 찍으면 훨씬 정확해요.'];
@@ -379,7 +381,11 @@ function renderResult(result, { thumb, text, model: usedModel, cached, method = 
             ? `<p class="snap-error">"${escapeHtml(text)}"(으)로 시작하거나 비슷한 브랜드예요.</p><div class="brand-hits" style="justify-content:center">${near
                 .map((b) => `<button type="button" class="brand-hit" data-brand="${escapeHtml(b.ko)}"><span aria-hidden="true">${CATEGORY_BY_ID[b.cat]?.emoji || '🍾'}</span><b>${escapeHtml(b.ko)}</b><small>${escapeHtml(b.origin)}</small></button>`)
                 .join('')}</div>`
-            : `<p class="snap-error">${escapeHtml(result.not_alcohol_reason || '사진에서 술병을 알아보지 못했어요.')}</p>`
+            : `<p class="snap-error">${escapeHtml(result.not_alcohol_reason || '사진에서 술병을 알아보지 못했어요.')}</p>${
+                read.length >= 2
+                  ? `<p class="note" style="margin-top:10px">라벨에서 읽은 글자: <b>${escapeHtml(read)}</b></p><button type="button" class="ask-ai" style="margin-top:8px" data-ask="${escapeHtml(read)}"><span aria-hidden="true">🔎</span><span><b>"${escapeHtml(read)}" 이름으로 알아보기</b><small>술 이름이 맞다면 브랜드 사전이나 무료 AI에게 물어봐요</small></span></button>`
+                  : ''
+              }`
         }
         <ul class="bullets" style="text-align:left;margin-top:12px">${tips.map((t) => `<li>${t}</li>`).join('')}</ul>
         <div class="link-grid" style="margin-top:14px"><button type="button" class="primary" data-snap-camera>📷 ${text ? '사진으로 찍기' : '다시 찍기'}</button><button type="button" data-close>닫기</button></div>

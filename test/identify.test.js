@@ -513,3 +513,18 @@ test('Workers AI 사진: 이름 칸이 비어도 라벨 글자로, 술 아니라
   assert.equal(r3.is_alcohol, false);
   assert.equal(cola.calls.length, 1);
 });
+
+test('이름 질문: 모르는 이름은 지어내지 말라고 함, 사진 경로에서 모른다고 하면 종류 일반 설명', async () => {
+  const text = buildWorkersAiInput({ text: 'Sengur Ultra' }).messages[1].content;
+  assert.match(text, /확실히 모르면/);
+  assert.match(text, /is_alcohol 을 false/);
+  // 사진 경로: 설명 단계가 "모른다"(is_alcohol false)고 해도 사진의 종류로 일반 설명
+  const vision = { is_alcohol: true, name: 'Sengur Ultra', category: 'beer', style: 'lager', label_text: 'SENGUR ULTRA EXTRA SMOOTH LAGER' };
+  const ai = fakeAi((n) => (n === 1 ? { response: JSON.stringify(vision) } : { response: { is_alcohol: false, not_alcohol_reason: '이 이름의 술 정보를 찾지 못했어요.' } }));
+  const r = (await createWorkersAiIdentifier({ ai }).identify({ images: [{ mediaType: 'image/jpeg', data: TINY_JPEG }] })).result;
+  assert.equal(r.is_alcohol, true);
+  assert.equal(r.category, 'beer');
+  assert.equal(r.name_ko, 'Sengur Ultra');
+  assert.match(r.how_to_drink.glass, /맥주/);
+  assert.match(ai.calls[1].input.messages[1].content, /위 지시보다 우선/);
+});

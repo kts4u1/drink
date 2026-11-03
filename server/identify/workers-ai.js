@@ -123,7 +123,7 @@ export function visionHint(v) {
   ].filter(Boolean);
   if (!facts.length) return '';
   return `참고 (사진의 라벨에서 읽은 정보): ${facts.join(' · ')}
-이 정보와 어긋나게 설명하지 마세요. 특히 종류를 바꾸지 마세요. 이 제품을 잘 모르면 지어내지 말고, 이 종류·스타일의 일반적인 특징과 한국 가격대로 설명하고 confidence 는 low 로 하세요.`;
+이 정보가 위 지시보다 우선이에요: 사진 속 술은 확실히 있으니 is_alcohol 은 true 로 하세요. 이 정보와 어긋나게 설명하지 마세요. 특히 종류를 바꾸지 마세요. 이 제품을 잘 모르면 지어내지 말고, 이 종류·스타일의 일반적인 특징과 한국 가격대로 설명하고 confidence 는 low 로 하세요.`;
 }
 
 /**
@@ -319,8 +319,8 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
     let result = cleanKorean(korean.result, base);
     if (str(v.country, 60)) result.country = countryKo(v.country);
     result.style = styleKo(result.style) || styleKo(v.style);
-    // AI 가 제품을 몰라 다른 종류로 지어냈으면(맥주 사진인데 위스키 설명) 그 설명은 버리고 종류의 일반 설명으로
-    if (CATEGORIES.includes(v.category) && v.category !== 'other' && result.category && result.category !== v.category) {
+    // AI 가 제품을 몰라 다른 종류로 지어냈거나(맥주 사진인데 위스키 설명) 모른다고 했으면 종류의 일반 설명으로
+    if (CATEGORIES.includes(v.category) && v.category !== 'other' && (result.is_alcohol === false || (result.category && result.category !== v.category))) {
       result = genericResult(v) || result;
     }
     result = sanePrice(mergeVision(result, v), CATEGORY_BY_ID[v.category]?.name);
