@@ -227,25 +227,33 @@ export function createWorld(fetchJson, ctx = {}) {
       if (!hit) return null;
       const idx = hit.p[0];
       const wines = hit.p[5] ? ((await fetchJson(`w/${shardOf(idx)}.json`).catch(() => ({})))[idx] || []) : [];
-      const wine = pickWine(wines, text);
+      const wine = pickWine(wines, text, hit.p[1]);
       return worldResult({ meta: m, p: hit.p, wines, wine, text }, ctx);
     },
   };
 }
 
-/** 생산자의 와인 중 글자와 가장 잘 맞는 것 (없으면 null) */
-export function pickWine(wines, text) {
+/**
+ * 생산자의 와인 중 글자와 가장 잘 맞는 것 (없으면 null)
+ * 생산자 이름의 단어("Zind Humbrecht"의 zind)는 세지 않음 — 그 와인이 아니어도 라벨에 늘 있으니까
+ */
+export function pickWine(wines, text, producer = '') {
+  const own = new Set(nameKey(producer).split(' '));
   const tset = new Set(nameKey(text).split(' '));
   let best = null;
   for (const w of wines || []) {
-    const toks = [...new Set(nameKey(w[0]).split(' '))].filter((t) => t.length >= 3 && !GENERIC.has(t));
+    const toks = [...new Set(nameKey(w[0]).split(' '))].filter((t) => t.length >= 3 && !GENERIC.has(t) && !own.has(t));
     if (!toks.length) continue;
     const hit = toks.filter((t) => tset.has(t)).length;
     if (!hit) continue;
     const score = hit / toks.length + hit * 0.25;
     if (!best || score > best.score) best = { w, score };
   }
-  return best && best.score >= 0.75 ? best.w : null;
+  if (best && best.score >= 0.75) return best.w;
+  // 못 골랐는데 생산자 이름을 그대로 쓴 와인이 하나뿐이면 대표 와인으로 ("Château Margaux" → 그랑 뱅)
+  const core = coreKey(producer);
+  const flagship = core ? (wines || []).filter((w) => coreKey(w[0]).startsWith(core)) : [];
+  return flagship.length === 1 ? flagship[0] : null;
 }
 
 const top = (counts, n) =>

@@ -168,6 +168,12 @@ test('찾기: pickWine 은 단어를 한 번씩만 셈', () => {
   const wines = [['Malbec-Malbec', 'r', [], [], 14, 4, 2, 0], ['Malbec Argentino', 'r', [], [], 14, 4, 2, 0]];
   assert.equal(pickWine(wines, 'Catena Zapata Malbec Argentino')[0], 'Malbec Argentino');
   assert.equal(pickWine(wines, 'Catena Zapata Cabernet'), null);
+  // 생산자 이름의 단어는 세지 않음
+  const zind = [['Zind', 'w', [], [], 13, 3, 3, 0], ['Riesling Alsace', 'w', [], [], 12, 3, 3, 0]];
+  assert.equal(pickWine(zind, 'Domaine Zind Humbrecht Riesling', 'Domaine Zind Humbrecht')[0], 'Riesling Alsace');
+  // 못 고르면 생산자 이름을 그대로 쓴 와인 하나 (대표 와인)
+  const cm = [['Château Margaux (Premier Grand Cru Classé)', 'r', [], [], 13, 4, 3, 0], ['Pavillon Rouge', 'r', [], [], 13, 4, 3, 0]];
+  assert.equal(pickWine(cm, 'Chateau Margaux 2015', 'Château Margaux')[0], 'Château Margaux (Premier Grand Cru Classé)');
   assert.equal(findProducer(new Map(), 'anything'), null);
   // worldResult 은 index 없이 meta·생산자만으로
   const r = worldResult({ meta: { regions: [], grapes: [], harmonize: [] }, p: [0, 'Test Brewery', 'beer', '독일', 'Bavaria', 0] }, ctx);
