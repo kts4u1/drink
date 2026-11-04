@@ -71,6 +71,7 @@ Cloudflare 정보를 넣으면 **Cloudflare Workers AI 무료 할당량**으로 
 | 소주·맥주·막걸리 실제 가격 | 한국소비자원 참가격 — [세일레이더](https://github.com/kts4u1/Sale-and-Discount) 앱이 매일 받아 GitHub Pages 에 올리는 스냅샷에서 술만 골라냄 | 매일 (조사는 매주 금요일) |
 | 술 살 수 있는 곳 위치 | [OpenStreetMap](https://www.openstreetmap.org) (전국 마트·백화점·주류 전문점·양조장 약 2,100곳) + 참가격 조사 매장 | 매일 |
 | 사진 분석 (기기 안) | [Tesseract.js](https://github.com/naptha/tesseract.js) 글자 인식(영어·한국어) · [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) 바코드 · 브랜드 사전(`public/js/content/brands.js`, 직접 작성) | - |
+| 세계 술 데이터 | [X-Wines](https://github.com/rogerioxavier/X-Wines) 와인 10만 개 (CC0) · [위키데이터](https://www.wikidata.org) 생산자 (CC0) — `npm run data:world` | 직접 받을 때 |
 | 바코드 제품 정보 | [Open Food Facts](https://world.openfoodfacts.org) 공개 제품 DB (무료, 키 없음) | 요청할 때 |
 | 사진 분석 (무료 AI) | Cloudflare Workers AI (Llama 4 Scout, 하루 무료 할당량) — Cloudflare Worker 를 거쳐 호출 | 요청할 때 |
 | 동네 이름 | OpenStreetMap Nominatim (위치가 바뀔 때만 한 번, 이 기기에 저장) | - |
@@ -129,10 +130,40 @@ npm run data:update
 화면은 무료 AI 가 켜져 있으면 먼저 쓰고, **하루 사용량이 끝나거나 1분 넘게 응답이 없으면 자동으로 기기 안 분석으로** 바꿉니다.
 그래서 아무 설정 없이 배포해도 사진 분석이 됩니다.
 
+### 세계 술 데이터 (와인 10만 개 · 생산자 3만 5천 곳)
+세상의 모든 술을 사람이 하나하나 설명할 수는 없어서, 세 겹으로 찾습니다.
+
+1. **브랜드 사전** (`public/js/content/brands.js`, 직접 쓴 한국어 설명) — 한국에서 많이 보이는 브랜드
+2. **세계 술 데이터** (`data/world/`) — 사전에 없으면 여기서. 와인은 품종·산지·바디감·산도·어울리는 음식까지,
+   와이너리·양조장·증류소는 어느 나라·지역인지와 그 술 종류의 일반 설명
+3. **무료 AI** — 둘 다 없을 때만 (지어내지 않게 사진에서 읽은 정보를 같이 넘김)
+
+| 데이터 | 내용 | 라이선스 |
+| --- | --- | --- |
+| [X-Wines](https://github.com/rogerioxavier/X-Wines) | 62개 나라 와인 100,646개 · 와이너리 30,190곳 · 산지 2,160곳 · 품종 777종 | CC0 |
+| [위키데이터](https://www.wikidata.org) | 와이너리·맥주 양조장·사케 양조장·위스키 증류소·(생산품이 확인된) 증류소 약 4,700곳 | CC0 |
+
+X-Wines 를 쓴 결과물은 논문 인용이 필요합니다: de Azambuja, R.X.; Morais, A.J.; Filipe, V. *X-Wines: A Wine Dataset for Recommender Systems and Machine Learning.*
+Big Data Cogn. Comput. 2023, 7, 20. https://doi.org/10.3390/bdcc7010020
+
+데이터는 작은 조각 파일로 나눠 두었습니다 (`meta.json` + 이름 조각 `k/` 약 2,900개 + 와인 조각 `w/` 202개).
+화면과 Worker 는 라벨 글자에 나온 단어의 조각만 받아서 (보통 10개 안팎, 수십 KB), 휴대폰 데이터와 Worker 무료 플랜의 짧은 계산 시간 안에 들어갑니다.
+"Margaux"처럼 산지·품종 이름이나 "reserve"·"bouteille" 같은 라벨에 흔한 말만으로는 생산자를 정하지 않습니다.
+
+다시 받기 (1분 안팎, 인터넷 필요. 실패하면 기존 파일을 그대로 둠):
+
+```bash
+npm run data:world
+```
+
+더 넓히려면: 위스키·코냑은 공개된 큰 목록이 드물어 브랜드 사전에 직접 더하는 것이 가장 정확합니다.
+[LWIN](https://www.liv-ex.com/lwin/)(와인·증류주 20만 개, Creative Commons, 무료지만 받으려면 신청서 작성)이나
+[수입식품정보마루](https://impfood.mfds.go.kr)의 수입 신고 제품명(한글 이름)도 후보입니다.
+
 ### 기기 안 분석은 이렇게 알아봐요
 1. **바코드**: 브라우저의 BarcodeDetector(없으면 zxing-wasm)로 EAN/UPC 바코드를 읽고, [Open Food Facts](https://world.openfoodfacts.org) 에서 제품 이름을 찾습니다.
 2. **라벨 글자**: Tesseract.js(영어+한국어)로 글자를 읽습니다. 글자 인식 파일은 `vendor/` 에 같이 배포되고 처음 한 번만 받습니다.
-3. **맞추기** (`public/js/lib/label.js`): 읽은 글자에서 도수·용량·숙성 연수·빈티지·포도 품종·지역을 뽑고,
+3. **맞추기** (`public/js/lib/label.js`, 사전에 없으면 `public/js/lib/world.js` 의 세계 술 데이터): 읽은 글자에서 도수·용량·숙성 연수·빈티지·포도 품종·지역을 뽑고,
    브랜드 사전과 맞춥니다. 글자 인식 오타(GLENFIDICH)와 띄어쓰기(라 프 로 익)도 견디고, "Terra"가 들어간 와인을 맥주 테라로 착각하지 않게 종류 단서를 함께 봅니다.
 4. 브랜드·백과·제품 목록의 내용으로 설명·마시는 법·음식·가격대를 채웁니다.
 
@@ -222,14 +253,15 @@ public/
   js/location.js       현재 위치 · 도시 선택 · 위치 권한 안내 (어디갈까 앱에서 가져옴)
   js/map.js            지도 (Leaflet)
   js/place.js          동네 이름 · 카카오맵/네이버지도 링크
-  js/lib/              검색 · 거리 · 가격 비교 · 취향 추천 · 결과 다듬기 · 라벨 분석(label.js) (테스트도 이 파일로)
+  js/lib/              검색 · 거리 · 가격 비교 · 취향 추천 · 결과 다듬기 · 라벨 분석(label.js) · 세계 술 데이터 찾기(world.js) (테스트도 이 파일로)
   js/content/          술 백과 콘텐츠 · 브랜드 사전(brands.js)
 scripts/
   update-data.js       데이터 받기 (참가격 + OpenStreetMap)
   lib/osm.js           OpenStreetMap 매장 분류
   lib/kca.js           참가격에서 술 고르기
   build.js             GitHub Pages 용 dist/ 만들기
-data/                  stores.json (매장), prices.json (참가격 술 가격)
+data/                  stores.json (매장), prices.json (참가격 술 가격), world/ (세계 술 데이터 조각)
+scripts/update-world.js 세계 술 데이터 받기 (X-Wines + 위키데이터)
 server/index.js        개발용 서버 (.env 에 키가 있으면 /api/identify 도)
 server/identify/       사진 인식: Workers AI(workers-ai.js) · Claude(claude.js) · JSON 형식(schema.js) · 지시문(prompt.js) · 검사·캐시·한도(handler.js)
 worker/index.js        Cloudflare Worker (무료 AI 사진 인식 API)

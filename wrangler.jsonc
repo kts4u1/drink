@@ -19,7 +19,9 @@
     // 같은 사진·이름을 다시 물어보는 건 저장된 결과라 세지 않고, 넘으면 화면이 기기 안 분석으로 바꿔요.
     "DAILY_LIMIT": "50",
     // AI_PROVIDER 가 anthropic 일 때 쓸 Claude 모델
-    "CLAUDE_MODEL": "claude-opus-5-5"
+    "CLAUDE_MODEL": "claude-opus-5-5",
+    // 세계 술 데이터 (X-Wines 와인 10만 · 위키데이터 생산자) — 화면과 같은 GitHub Pages 파일을 필요한 조각만 받아 씀
+    "WORLD_URL": "https://kts4u1.github.io/drink/data/world"
   },
   // Cloudflare Workers AI
   "ai": { "binding": "AI" },

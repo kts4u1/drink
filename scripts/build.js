@@ -23,6 +23,10 @@ async function main() {
     JSON.parse(text); // 깨진 파일이면 여기서 멈춤
     await fs.writeFile(path.join(DIST, 'data', file), text);
   }
+  // 세계 술 데이터 (X-Wines·위키데이터): meta.json + 작은 조각 파일들
+  const world = path.join(ROOT, 'data', 'world');
+  JSON.parse(await fs.readFile(path.join(world, 'meta.json'), 'utf8'));
+  await fs.cp(world, path.join(DIST, 'data', 'world'), { recursive: true });
 
   // 라벨 글자 인식(Tesseract.js)·바코드(zxing-wasm) — 기기 안에서 무료로 술 알아보기
   const pkg = (name) => path.dirname(require.resolve(`${name}/package.json`));

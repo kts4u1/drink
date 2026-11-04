@@ -409,9 +409,9 @@ export const SERVE = {
   baijiu: { temperature: '상온', glass: '작은 잔', methods: ['조금씩 향을 맡으며', '기름진 중식과 함께'] },
 };
 
-const strip = (html) => String(html || '').replace(/<[^>]+>/g, '');
+export const strip = (html) => String(html || '').replace(/<[^>]+>/g, '');
 
-function findCard(category, koName) {
+export function findCard(category, koName) {
   if (!category || !koName) return null;
   for (const sec of category.sections || []) {
     for (const card of sec.cards || []) {

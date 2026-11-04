@@ -7,7 +7,7 @@ import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from './content/index.js';
 import { CONFIDENCE_LABELS, cleanQueryText, displayName, normalizeResult, priceQuery } from './lib/identify.js';
 import { searchBrands } from './lib/label.js';
 import { norm, searchProducts } from './lib/search.js';
-import { OCR_DOWNLOAD_MB, analyzeLocally, analyzeName, dictionaryLookup } from './local-vision.js';
+import { OCR_DOWNLOAD_MB, analyzeLocally, analyzeName, dictionaryLookup, worldLookup } from './local-vision.js';
 import { mapSearchLinks } from './place.js';
 import { channelCard } from './render.js';
 import { SHOP_WORDS, fillProductKca, fillProductNearby, openProduct, openSheet, sheetIsCurrent } from './sheets.js';
@@ -309,10 +309,10 @@ async function identify({ images = [], text = '', thumb = null, preview = null, 
 let lastRequest = null;
 
 /**
- * 이름으로 알아보기: 브랜드 사전에 있으면 사전으로 바로 (정확하고 AI 사용량을 안 씀),
- * 없으면 무료 AI (없으면 백과·사전에서 비슷한 것)
+ * 이름으로 알아보기: 브랜드 사전 → 세계 술 데이터(와인 10만·생산자 3만 5천) → 무료 AI (없으면 백과·사전에서 비슷한 것)
+ * 사전·세계 데이터는 정확하고 AI 사용량을 안 씀
  */
-export function askText(text) {
+export async function askText(text) {
   const q = cleanQueryText(text);
   if (q.length < 2) {
     toast('술 이름을 두 글자 이상 적어 주세요.');
@@ -322,6 +322,15 @@ export function askText(text) {
   if (dict) {
     saveHistory({ result: dict, thumb: null, text: q, model: null, method: 'brand' });
     renderResult(dict, { text: q, method: 'brand' });
+    return;
+  }
+  if (busy) return;
+  const t = openSheet(loadingHtml({ text: q, steps: ['세계 술 데이터에서 찾는 중'], note: '와인 10만 개·생산자 3만 5천 곳에서 찾고 있어요.' }));
+  const found = await worldLookup(q);
+  if (!sheetIsCurrent(t)) return; // 기다리는 동안 창을 닫았으면
+  if (found) {
+    saveHistory({ result: found, thumb: null, text: q, model: null, method: 'world' });
+    renderResult(found, { text: q, method: 'world' });
     return;
   }
   identify({ text: q });
@@ -351,8 +360,9 @@ function bar(label, value) {
 }
 
 const METHOD_NOTES = {
-  local: '휴대폰 안에서 바코드·라벨 글자를 읽어 브랜드 사전과 맞춘 결과예요 (AI 아님).',
+  local: '휴대폰 안에서 바코드·라벨 글자를 읽어 브랜드 사전·세계 술 데이터와 맞춘 결과예요 (AI 아님).',
   brand: '앱의 브랜드 사전·술 백과에서 찾은 내용이에요 (AI 아님).',
+  world: '세계 술 데이터(X-Wines 와인 10만 개·위키데이터 생산자)에서 찾은 내용이에요 (AI 아님).',
 };
 
 function methodNote({ method, text, model: usedModel, cached }) {
@@ -489,7 +499,7 @@ function renderResult(result, { thumb, text, model: usedModel, cached, method = 
       ${result.storage ? `<div class="sheet-section"><h3>보관</h3><p>${escapeHtml(result.storage)}</p></div>` : ''}
       ${result.fun_fact ? `<div class="sheet-section"><h3>알고 마시면 더 맛있는 이야기</h3><p>${escapeHtml(result.fun_fact)}</p></div>` : ''}
       <div class="link-grid" style="margin-top:18px">
-        ${method === 'brand' && text && useAi() ? `<button type="button" data-ask-ai="${escapeHtml(text)}">🤖 무료 AI에게 더 자세히 묻기</button>` : ''}
+        ${(method === 'brand' || method === 'world') && text && useAi() ? `<button type="button" data-ask-ai="${escapeHtml(text)}">🤖 무료 AI에게 더 자세히 묻기</button>` : ''}
         <button type="button" data-snap-camera>📷 다른 술 찍기</button>
         ${cat ? `<a href="#guide/${cat.id}">${cat.emoji} ${escapeHtml(cat.name)} 알아보기</a>` : `<button type="button" data-share data-title="${escapeHtml(name)}" data-text="${escapeHtml(`${name} - ${result.summary}`)}" data-hash="#find">${ICON.share}공유</button>`}
       </div>

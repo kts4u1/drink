@@ -12,7 +12,8 @@
     "dev": "node --watch server/index.js",
     "test": "node --test \"test/**/*.test.js\"",
     "data:update": "node scripts/update-data.js",
-    "build": "node scripts/build.js"
+    "build": "node scripts/build.js",
+    "data:world": "node scripts/update-world.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",

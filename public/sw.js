@@ -19,6 +19,7 @@ const SHELL = [
   'js/snap.js',
   'js/local-vision.js',
   'js/lib/label.js',
+  'js/lib/world.js',
   'js/content/brands.js',
   'js/state.js',
   'js/util.js',

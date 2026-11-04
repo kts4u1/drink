@@ -8,7 +8,7 @@
 // 한국어 글자가 깨져서("위스키" → "위하벗") 나왔고, 사진 없이 이름만 물으면 한국어가 멀쩡했어요.
 //   1) 사진 → 영어로 제품 이름·라벨 글자·도수만 짧게 (buildVisionInput)
 //   2) 그 이름이 앱의 브랜드 사전에 있으면 사전으로 한국어 설명 (정확하고 빠르고 AI 사용량도 안 씀)
-//      없으면 그 이름 → 한국어 설명 (이름 질문과 같은 방식)
+//      없으면 세계 술 데이터(X-Wines 와인 10만 · 위키데이터 생산자)에서, 거기에도 없으면 그 이름 → 한국어 설명 (이름 질문과 같은 방식)
 //   3) 라벨에서 읽은 값(이름·도수·숙성·용량)으로 덮어쓰기 (mergeVision)
 import { BRANDS } from '../../public/js/content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from '../../public/js/content/index.js';
@@ -293,7 +293,10 @@ export function parseWorkersAiResponse(out) {
 const QUOTA = /4006|neuron|allocation|quota|exceeded|daily limit|upgrade to/i;
 const FORMAT = /json mode|response_format|json_schema|couldn.t be met|schema/i;
 
-export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL }) {
+/**
+ * ai: Workers AI 바인딩, world: lib/world.js 의 createWorld(...) 결과 (없으면 세계 데이터를 안 씀)
+ */
+export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL, world = null }) {
   async function run(input) {
     try {
       return await ai.run(model, input);
@@ -353,6 +356,14 @@ export function createWorkersAiIdentifier({ ai, model = DEFAULT_WORKERS_AI_MODEL
     // 브랜드 사전에 있으면 사전으로 (AI 를 한 번 덜 부름)
     const dict = dictionaryResult(v);
     if (dict) return { result: mergeVision(dict, v), model, usage: vOut?.usage ?? null, source: 'dictionary' };
+    // 세계 술 데이터에 있으면 그 정보로 (와인은 품종·산지·바디·음식까지)
+    if (world) {
+      const known = CATEGORIES.includes(v.category) && v.category !== 'other' ? v.category : undefined;
+      const found = await world
+        .lookup([str(v.name), str(v.producer), str(v.label_text, 200)].filter(Boolean).join(' '), { category: known, maxFiles: 25 })
+        .catch(() => null);
+      if (found) return { result: sanePrice(mergeVision(found, v), CATEGORY_BY_ID[found.category]?.name), model, usage: vOut?.usage ?? null, source: 'world' };
+    }
     // 없으면 이름으로 한국어 설명 받기 (이름에 숙성 연수·빈티지가 없으면 붙여서, 사진에서 읽은 종류·도수도 같이)
     const age = str(vision.age_or_vintage, 40);
     const korean = await identifyText(age && !base.includes(age) ? `${base} ${age}` : base, visionHint(v));

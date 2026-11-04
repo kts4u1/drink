@@ -14,9 +14,32 @@
 //   AI                    Workers AI 바인딩
 //   IDENTIFY_LIMITER      IP 별 1분 제한 (Rate Limiting 바인딩)
 //   CACHE                 결과 캐시·하루 사용량 (Workers KV)
+//   vars.WORLD_URL        세계 술 데이터 주소 (GitHub Pages 의 data/world, 작은 조각 파일을 필요한 것만 받음)
 import { DEFAULT_MODEL, createIdentifier } from '../server/identify/claude.js';
 import { createMemoryStore, handleIdentify, healthBody } from '../server/identify/handler.js';
 import { DEFAULT_WORKERS_AI_MODEL, createWorkersAiIdentifier } from '../server/identify/workers-ai.js';
+import { CATEGORY_BY_ID } from '../public/js/content/index.js';
+import { createWorld } from '../public/js/lib/world.js';
+
+// 같은 Worker 안에서는 받은 조각을 다시 씀 (Cloudflare 캐시에도 하루 저장)
+const worlds = new Map();
+export function worldFor(base, fetchImpl = fetch) {
+  if (!base) return null;
+  if (!worlds.has(base)) {
+    worlds.set(
+      base,
+      createWorld(
+        async (p) => {
+          const res = await fetchImpl(`${base.replace(/\/+$/, '')}/${p}`, { cf: { cacheTtl: 86400, cacheEverything: true } });
+          if (!res.ok) throw new Error(`world ${res.status}`);
+          return res.json();
+        },
+        { categories: CATEGORY_BY_ID },
+      ),
+    );
+  }
+  return worlds.get(base);
+}
 
 const memoryStore = createMemoryStore(200);
 
@@ -71,7 +94,7 @@ export function identifierForEnv(env) {
     });
   }
   // 기본: Cloudflare Workers AI (무료 하루 할당량)
-  if (env.AI) return createWorkersAiIdentifier({ ai: env.AI, model: env.WORKERS_AI_MODEL || DEFAULT_WORKERS_AI_MODEL });
+  if (env.AI) return createWorkersAiIdentifier({ ai: env.AI, model: env.WORKERS_AI_MODEL || DEFAULT_WORKERS_AI_MODEL, world: worldFor(env.WORLD_URL) });
   return null;
 }
 

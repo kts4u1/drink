@@ -2,10 +2,12 @@
 //   1) 바코드: 브라우저 BarcodeDetector → 없으면 zxing-wasm → Open Food Facts(무료 공개 제품 DB)에서 제품 찾기
 //   2) 라벨 글자: Tesseract.js (영어+한국어) 로 글자 읽기
 //   3) lib/label.js 로 브랜드 사전·백과와 맞춰 설명 만들기
+//   4) 사전에 없으면 세계 술 데이터(lib/world.js: X-Wines 와인 10만 · 위키데이터 생산자)에서 찾기
 // 글자 인식 파일(약 9MB)은 이 사이트(vendor/)에서 처음 한 번만 받고 브라우저에 저장돼요.
 import { BRANDS } from './content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from './content/index.js';
-import { analyzeLabel, extractAttributes, matchBrands } from './lib/label.js';
+import { analyzeLabel, extractAttributes, matchBrands, topCategory } from './lib/label.js';
+import { createWorld } from './lib/world.js';
 
 const abs = (path) => new URL(path, document.baseURI).href;
 export const OCR_DOWNLOAD_MB = 9;
@@ -161,10 +163,50 @@ export async function analyzeLocally(images, onStep = () => {}) {
   }
 
   onStep('match');
-  return analyzeLabel(
+  const result = analyzeLabel(
     { text, off, barcode, source: 'photo' },
     { brands: BRANDS, products: PRODUCTS, categories: CATEGORY_BY_ID, buy: BUY_BY_CATEGORY },
   );
+  // 사전에서 브랜드를 못 찾았으면(바코드 제품도 없으면) 세계 데이터에서
+  if (!off && (!result.is_alcohol || /생산자 확인 필요/.test(result.name_ko))) {
+    const found = await worldLookup(text, result.is_alcohol ? { category: result.category } : {});
+    if (found) return withLabelValues(found, text);
+  }
+  return result;
+}
+
+// ---------- 세계 술 데이터 ----------
+
+let world = null;
+function getWorld() {
+  world ||= createWorld(
+    async (p) => {
+      const res = await fetch(abs(`data/world/${p}`));
+      if (!res.ok) throw new Error(`세계 데이터 ${res.status}`);
+      return res.json();
+    },
+    { categories: CATEGORY_BY_ID },
+  );
+  return world;
+}
+
+/** 라벨에서 읽은 도수·용량이 있으면 그 값으로 (데이터는 대표 빈티지 기준) */
+function withLabelValues(result, text) {
+  const attrs = extractAttributes(text);
+  return { ...result, abv: attrs.abv ? `${attrs.abv}%` : result.abv, volume: attrs.volumeMl ? `${attrs.volumeMl}ml` : result.volume };
+}
+
+/**
+ * 브랜드 사전에 없을 때 세계 술 데이터에서 찾기 (와인 10만 개 · 생산자 3만 5천 곳)
+ * 필요한 작은 조각 파일만 받아요. 못 찾거나 못 받으면 null
+ */
+export async function worldLookup(text, hint = {}) {
+  const category = hint.category || topCategory(extractAttributes(text).votes) || undefined;
+  try {
+    return await getWorld().lookup(text, { ...hint, category });
+  } catch {
+    return null;
+  }
 }
 
 /** 이름으로 찾기 (글자 인식 없이 브랜드 사전·백과에서) */
