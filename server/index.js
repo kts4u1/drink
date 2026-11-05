@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { DEFAULT_MODEL, createIdentifier } from './identify/claude.js';
 import { createMemoryLimiter, createMemoryStore, handleIdentify, healthBody } from './identify/handler.js';
-import { handlePriceGet, handlePriceReport } from './prices/handler.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,17 +52,7 @@ export function createApp({ identifier = null, dailyLimit = 0, limiter = createM
   });
 
   const store = createMemoryStore();
-  const priceStore = createMemoryStore(5000);
-  app.get('/api/health', (req, res) => res.json(healthBody({ identifier, dailyLimit, prices: true })));
-  // 사용자 가격 제보 (개발 서버는 메모리에만 — 다시 켜면 사라짐)
-  app.get(['/api/prices', '/api/prices/:id'], async (req, res) => {
-    const { status, body } = await handlePriceGet({ id: req.params.id || '' }, { store: priceStore });
-    res.status(status).json(body);
-  });
-  app.post('/api/prices', express.json({ limit: '4kb' }), async (req, res) => {
-    const { status, body } = await handlePriceReport({ body: req.body, ip: req.ip }, { store: priceStore });
-    res.status(status).json(body);
-  });
+  app.get('/api/health', (req, res) => res.json(healthBody({ identifier, dailyLimit })));
   app.post('/api/identify', express.json({ limit: '12mb' }), async (req, res) => {
     const { status, body } = await handleIdentify({ body: req.body, ip: req.ip }, { identifier, store, limiter, dailyLimit, log: console.log });
     res.status(status).json(body);

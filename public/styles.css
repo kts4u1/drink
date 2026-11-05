@@ -766,23 +766,39 @@ dialog.loc-sheet { width: min(440px, 100vw); }
 .price-scale b { display: block; font-size: 13.5px; color: var(--text); margin-top: 1px; word-break: keep-all; }
 .price-scale .v-cheap { background: var(--good-bg); border-color: transparent; }
 .price-scale .v-pricey { background: var(--warn-bg); border-color: transparent; }
-.price-box h4 { margin: 16px 0 8px; font-size: 14.5px; display: flex; gap: 6px; align-items: baseline; }
+.price-box h4 { margin: 18px 0 8px; font-size: 14.5px; display: flex; gap: 6px; align-items: baseline; }
 .price-box h4 small { font-size: 12.5px; color: var(--muted); font-weight: 600; }
-.price-box .price-row .p small { font-weight: 750; }
-.empty-line { margin: 0; font-size: 14px; color: var(--muted); padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
-.report-form { margin-top: 14px; padding: 12px; border-radius: 12px; border: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--line)); background: var(--surface); display: grid; gap: 10px; }
-.report-form h4 { margin: 0; }
-.field { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
-.field[hidden] { display: none; }
-.field input, .field select {
-  width: 100%; min-height: 44px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 9px 11px;
-  font-size: 16px; font-weight: 600; color: var(--text);
+.channel-prices { display: grid; gap: 6px; }
+.ch-price {
+  display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center;
+  padding: 9px 11px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line);
 }
-.field input:focus, .field select:focus { outline: 2px solid var(--brand); outline-offset: 0; border-color: transparent; }
-.report-form .primary-button:disabled { opacity: .6; cursor: wait; }
-.form-msg { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--good); min-height: 0; }
-.form-msg:empty { display: none; }
-.form-msg.bad { color: var(--warn); }
+.ch-price .em { font-size: 18px; text-align: center; }
+.ch-price .n { min-width: 0; }
+.ch-price .n b { display: block; font-size: 14.5px; }
+.ch-price .n small { display: block; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.ch-price .near-store .text-link { font-size: 12.5px; text-align: left; margin-top: 2px; }
+.ch-price .p { text-align: right; white-space: nowrap; }
+.ch-price .p b { display: block; font-size: 14.5px; font-weight: 800; }
+.ch-price .p small { display: block; font-size: 12px; }
+.tip { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--info-bg); font-size: 13.5px; line-height: 1.55; }
+.season-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; }
+.season-list li { padding: 7px 10px; border-radius: 10px; background: var(--surface-2); }
+.season-list li.on { background: var(--good-bg); color: var(--good); font-weight: 750; }
+.live-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.live-links a {
+  display: grid; gap: 2px; text-decoration: none; color: var(--text); text-align: center;
+  border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 9px 6px; min-height: 52px; align-content: center;
+}
+.live-links a b { font-size: 14px; }
+.live-links a small { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.live-links a.live-whiskywatch { border-color: color-mix(in srgb, var(--brand) 40%, var(--line)); }
+.season-banner { margin: 12px 0; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 4px; font-size: 13.5px; }
+.season-banner b { font-size: 14px; }
+.season-banner span.on { color: var(--good); font-weight: 750; }
+.list-sub { margin: 14px 2px 2px; font-size: 14.5px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.list-sub small { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.brand-item .p small { color: var(--muted); }
 
 /* 지도 앱에서 더 찾기 */
 .more-search { margin-top: 14px; padding: 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }

@@ -1,16 +1,19 @@
 // 최저가 탭
-// - 와인·위스키·양주·사케·전통주: 공공 가격 자료가 없어서, 참고 가격대로 "얼마면 싼 편"인지 + 사용자들이 매장에서 본 가격(제보)
+// - 와인·위스키·양주·사케·전통주: 공공 가격 자료가 없어서, 참고 가격대로 "얼마면 싼 편"인지, 판매처별 대략적인 가격,
+//   싸게 사기 좋은 때, 가까운 싼 곳 (제품 화면에는 오늘 가격을 볼 수 있는 사이트 링크)
 // - 소주·맥주·막걸리: 한국소비자원 참가격이 조사한 내 주변 실제 판매 가격
-import { priceSummary } from './api.js';
+import { BRANDS } from './content/brands.js';
 import { CATEGORY_BY_ID, PRODUCTS, SHOP_TYPES, STORE_KINDS } from './content/index.js';
 import { loadPrices, loadStores } from './data.js';
 import { fmtDistance } from './lib/geo.js';
 import { comparePrices, storeFilter, storesWithin } from './lib/nearby.js';
-import { BUDGETS, CHEAP_PLACES, DAILY_GROUP, PRICE_GROUPS, VERDICT_LABEL, goodPrice, inBudget, priceProducts, priceVerdict, shortWon, sortPriceProducts, timeAgo } from './lib/prices.js';
+import { TIER_RANGES, searchBrands } from './lib/label.js';
+import { BUDGETS, CHEAP_PLACES, DAILY_GROUP, PRICE_GROUPS, channelPrices, goodPrice, groupOf, inBudget, priceProducts, saleSeasons, seasonText, sortPriceProducts } from './lib/prices.js';
 import { searchProducts } from './lib/search.js';
 import { canComparePrice, openKcaStore, openProduct, openStore } from './sheets.js';
+import { askText } from './snap.js';
 import { onLocationChange, state } from './state.js';
-import { debounce, escapeHtml, fmtDay, fmtWon, setPressed, storage } from './util.js';
+import { debounce, escapeHtml, fmtDay, fmtWon, fmtWonShort, setPressed, storage } from './util.js';
 
 const RADII = [3, 5, 10, 20, 50];
 const KINDS = [
@@ -24,10 +27,9 @@ const prefs = { group: 'whisky', budget: 'all', order: 'pop', kind: 'soju', prod
 if (!RADII.includes(prefs.radius)) prefs.radius = 10;
 if (!GROUP_IDS.includes(prefs.group)) prefs.group = 'whisky';
 if (!BUDGETS.some((b) => b.id === prefs.budget)) prefs.budget = 'all';
+if (!['pop', 'low', 'high'].includes(prefs.order)) prefs.order = 'pop';
 
 let data = null; // 참가격
-let summary = null; // 제보 요약 (null = 제보를 못 씀)
-let summaryLoaded = false;
 let query = '';
 let shown = PAGE;
 let lastRows = [];
@@ -47,7 +49,7 @@ function renderGroups() {
   els.daily.hidden = !isDaily();
   els.lead.textContent = isDaily()
     ? '한국소비자원 참가격이 매주 조사한 실제 판매 가격이에요. 소주·맥주·막걸리는 어디서 사면 싼지 매장별로 비교해 보세요.'
-    : '와인·위스키·양주는 같은 술도 매장마다 값이 크게 달라요. 얼마면 싼 편인지, 다른 사람들이 어디서 얼마에 봤는지 확인하고 내가 본 가격도 알려 주세요.';
+    : '와인·위스키·양주는 같은 술도 어디서 사느냐에 따라 값이 크게 달라요. 얼마면 싼 편인지, 어디서 사면 싼지, 언제 사면 싼지 알려드려요.';
 }
 
 function render() {
@@ -67,23 +69,42 @@ function premiumList() {
     list = searchProducts(priceProducts(PRODUCTS), query).filter((p) => inBudget(p, prefs.budget));
     return list;
   }
-  return sortPriceProducts(list, prefs.order, summary || {});
+  return sortPriceProducts(list, prefs.order);
+}
+
+// 브랜드 사전에서 이 묶음의 술 종류 (검색할 때 목록에 없는 브랜드도 가격대를 보여 줌)
+const PREMIUM_CATS = new Set(PRICE_GROUPS.flatMap((g) => g.cats));
+
+/** 검색어에 맞는 브랜드 (앱 제품 목록에 이미 나온 브랜드는 빼고) → [{ brand, range }] */
+function brandMatches(products) {
+  if (query.trim().length < 2) return [];
+  const shown = products.map((p) => `${p.name} ${p.en || ''} ${(p.aliases || []).join(' ')}`.toLowerCase());
+  return searchBrands(BRANDS, query, 8)
+    .filter((b) => PREMIUM_CATS.has(b.cat))
+    .filter((b) => !shown.some((t) => t.includes(b.ko.toLowerCase()) || b.names.some((n) => n.length >= 4 && t.includes(n.toLowerCase()))))
+    .map((b) => ({ brand: b, range: (TIER_RANGES[b.cat] || TIER_RANGES.default)[Math.min(b.tier || 1, 4)] }))
+    .filter((x) => x.range)
+    .slice(0, 5);
+}
+
+function brandHtml({ brand, range }) {
+  const cat = CATEGORY_BY_ID[brand.cat];
+  return `<button type="button" class="price-item brand-item" data-brand="${escapeHtml(brand.ko)}">
+    <span class="em" aria-hidden="true">${cat?.emoji || '🍾'}</span>
+    <span class="n"><b>${escapeHtml(brand.ko)}</b><small>${escapeHtml(brand.style || cat?.name || '')}${brand.flagship ? ` · 대표 ${escapeHtml(brand.flagship)}` : ''}</small></span>
+    <span class="p"><b>${fmtWonShort(range[0])}~${fmtWonShort(range[1])}원</b><small class="muted">브랜드 가격대</small></span>
+  </button>`;
 }
 
 function itemHtml(p) {
   const cat = CATEGORY_BY_ID[p.cat];
-  const s = summary?.[p.id];
-  const verdict = s && priceVerdict(p, s.min);
+  const cheapest = channelPrices(p)[0];
   const meta = [p.sub, p.ml ? `${p.ml}ml` : ''].filter(Boolean).join(' · ');
   return `<button type="button" class="price-item" data-product="${escapeHtml(p.id)}">
     <span class="em" aria-hidden="true">${cat?.emoji || '🍾'}</span>
     <span class="n"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(meta)}</small></span>
-    <span class="p"><b>${shortWon(p.price[0])}~${shortWon(p.price[1])}원</b><small class="v-cheap">${shortWon(goodPrice(p))} 이하면 싼 편</small></span>
-    ${
-      s
-        ? `<span class="rep">💬 제보 최저 <b>${fmtWon(s.min)}</b> <span class="v-${verdict}">${VERDICT_LABEL[verdict]}</span> · ${escapeHtml(s.minStore)} · ${timeAgo(s.minT)}${s.n > 1 ? ` · 제보 ${s.n}건` : ''}</span>`
-        : ''
-    }
+    <span class="p"><b>${fmtWonShort(p.price[0])}~${fmtWonShort(p.price[1])}원</b><small class="v-cheap">${fmtWonShort(goodPrice(p))} 이하면 싼 편</small></span>
+    <span class="rep">${cheapest.emoji} ${escapeHtml(cheapest.name)}에서 <b>${fmtWonShort(cheapest.lo)}~${fmtWonShort(cheapest.hi)}원</b>쯤${p.buyNote ? ` · ${escapeHtml(p.buyNote)}` : ''}</span>
   </button>`;
 }
 
@@ -92,19 +113,17 @@ function renderPremium() {
   setPressed(els.budget, 'data-budget', prefs.budget);
   setPressed(els.order, 'data-order', prefs.order);
   const list = premiumList();
-  if (!list.length) {
-    els.items.innerHTML = `<div class="empty"><strong>찾는 제품이 없어요</strong>가격 비교는 앱 목록의 대표 제품만 할 수 있어요. 다른 술은 📷 사진·이름으로 알아보면 참고 가격대를 알려드려요.</div>`;
+  const brands = brandMatches(list);
+  if (!list.length && !brands.length) {
+    els.items.innerHTML = `<div class="empty"><strong>찾는 제품이 없어요</strong>다른 술은 📷 사진·이름으로 알아보면 참고 가격대를 알려드려요.</div>`;
   } else {
-    els.items.innerHTML = list.map(itemHtml).join('');
+    els.items.innerHTML =
+      list.map(itemHtml).join('') +
+      (brands.length ? `<h3 class="list-sub">브랜드 사전 <small>대표 제품 기준 가격대 · 누르면 자세히</small></h3>${brands.map(brandHtml).join('')}` : '');
   }
-  const reported = summary ? Object.keys(summary).length : 0;
-  els.itemsLine.innerHTML = `참고 가격: 2025~2026년 국내 대형마트·창고형 마트·주류 전문점의 대략적인 판매가 범위예요. "싼 편"은 그 범위의 아래쪽 4분의 1이에요.<br>${
-    summary
-      ? `제보 가격: 사용자들이 매장에서 직접 본 가격 (최근 120일${reported ? ` · ${reported}개 제품` : ''}). 제품을 누르면 매장별 가격을 보고 알려 줄 수 있어요.`
-      : summaryLoaded
-        ? '가격 제보 서버에 연결하지 못해서 참고 가격만 보여드려요.'
-        : '제보 가격을 불러오는 중…'
-  }`;
+  els.itemsLine.innerHTML =
+    '참고 가격: 2025~2026년 국내 대형마트·창고형 마트·주류 전문점의 대략적인 판매가 범위예요(인기 제품은 2026년 하반기 공개 판매가로 다시 맞춤). "싼 편"은 그 범위의 아래쪽 4분의 1이에요.<br>제품을 누르면 판매처별 대략적인 가격, 가까운 매장, 오늘 가격을 볼 수 있는 사이트(위스키와치·데일리샷·네이버)가 나와요.';
+  renderSeasons();
   renderCheapPlaces();
 }
 
@@ -144,10 +163,12 @@ async function renderCheapPlaces() {
     : '';
 }
 
-async function loadSummary(fresh = false) {
-  summary = await priceSummary({ fresh });
-  summaryLoaded = true;
-  if (!isDaily() && !document.getElementById('view-prices').hidden) renderPremium();
+/** 다음 할인 행사 (명절 선물 세트 행사, 연말 행사) */
+function renderSeasons() {
+  const seasons = saleSeasons();
+  const wine = prefs.group === 'wine' ? '<span>🍷 대형마트 와인 장터는 보통 봄·가을에 열려요</span>' : '';
+  els.season.innerHTML = seasons.length || wine ? `<b>📅 싸게 사기 좋은 때</b>${seasons.map((x) => `<span class="${x.active ? 'on' : ''}">${escapeHtml(seasonText(x))}</span>`).join('')}${wine}` : '';
+  els.season.hidden = !els.season.innerHTML;
 }
 
 // ---------- 소주·맥주·막걸리 (참가격) ----------
@@ -265,7 +286,7 @@ function update(changes) {
 }
 
 export function initPrices() {
-  for (const id of ['priceLead', 'priceGroups', 'pricePremium', 'priceDaily', 'priceSearch', 'priceBudget', 'priceOrder', 'priceCheap', 'priceItems', 'priceItemsLine', 'priceKinds', 'priceProducts', 'priceRadius', 'priceSortToggle', 'priceHero', 'priceNotice', 'priceCvs', 'priceList', 'priceMore', 'priceDataLine']) {
+  for (const id of ['priceLead', 'priceGroups', 'pricePremium', 'priceDaily', 'priceSearch', 'priceBudget', 'priceOrder', 'priceSeason', 'priceCheap', 'priceItems', 'priceItemsLine', 'priceKinds', 'priceProducts', 'priceRadius', 'priceSortToggle', 'priceHero', 'priceNotice', 'priceCvs', 'priceList', 'priceMore', 'priceDataLine']) {
     const key = id.replace('price', '');
     els[key.charAt(0).toLowerCase() + key.slice(1)] = document.getElementById(id);
   }
@@ -289,6 +310,8 @@ export function initPrices() {
     }, 150),
   );
   els.items.addEventListener('click', (e) => {
+    const brand = e.target.closest('[data-brand]');
+    if (brand) return askText(brand.dataset.brand);
     const btn = e.target.closest('[data-product]');
     const p = btn && PRODUCTS.find((x) => x.id === btn.dataset.product);
     if (p) openProduct(p, { focus: 'price' });
@@ -328,8 +351,6 @@ export function initPrices() {
       if (r) openKcaStore(r.store);
     }
   });
-  // 제품 화면에서 제보하면 목록의 "제보 최저"도 새로
-  document.addEventListener('prices:reported', () => loadSummary(true));
   onLocationChange(() => {
     if (!document.getElementById('view-prices').hidden) render();
   });
@@ -339,7 +360,7 @@ export function initPrices() {
 export function showPrices(sub = '') {
   const product = sub && PRODUCTS.find((x) => x.id === sub);
   if (product && canComparePrice(product)) {
-    const group = PRICE_GROUPS.find((g) => g.cats.includes(product.cat));
+    const group = groupOf(product);
     if (group) Object.assign(prefs, { group: group.id });
   } else if (sub) {
     Object.assign(prefs, { group: DAILY_GROUP.id, product: sub });
@@ -356,6 +377,5 @@ export function showPrices(sub = '') {
     }
   }
   render();
-  if (!summaryLoaded) loadSummary();
   if (product && canComparePrice(product)) openProduct(product, { focus: 'price' });
 }

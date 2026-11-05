@@ -61,7 +61,8 @@ export function fmtWonShort(n) {
   if (n == null) return '';
   if (n >= 10000) {
     const man = n / 10000;
-    return `${Number.isInteger(man) ? man : man.toFixed(man < 10 ? 1 : 0).replace(/\.0$/, '')}만`;
+    // 13.5만처럼 소수 한 자리까지 (반올림해서 14만이 되면 다른 곳의 135,000원과 어긋나 보여서)
+    return `${Number(man.toFixed(1))}만`;
   }
   return n.toLocaleString('ko-KR');
 }

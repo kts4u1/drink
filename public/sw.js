@@ -1,6 +1,6 @@
 // 서비스워커: 최신 화면을 우선 보여주고(network-first), 오프라인일 때만 저장된 화면을 사용합니다.
 // GitHub Pages 처럼 하위 경로(/drink/)에서도 동작하도록 모든 주소를 상대 경로로 씁니다.
-const CACHE = 'sulsul-v3';
+const CACHE = 'sulsul-v4';
 const SHELL = [
   './',
   'styles.css',

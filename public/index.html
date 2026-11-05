@@ -124,7 +124,7 @@
     <!-- 최저가 -->
     <section class="view" id="view-prices" role="tabpanel" aria-labelledby="tab-prices" hidden>
       <h1 class="view-title">💸 최저가</h1>
-      <p class="view-lead" id="priceLead">와인·위스키·양주는 같은 술도 매장마다 값이 크게 달라요. 얼마면 싼 편인지, 다른 사람들이 어디서 얼마에 봤는지 확인하고 내가 본 가격도 알려 주세요.</p>
+      <p class="view-lead" id="priceLead">와인·위스키·양주는 같은 술도 어디서 사느냐에 따라 값이 크게 달라요. 얼마면 싼 편인지, 어디서 사면 싼지, 언제 사면 싼지 알려드려요.</p>
       <div class="chip-row group-chips" id="priceGroups" role="group" aria-label="술 종류"></div>
 
       <!-- 와인·위스키·양주: 참고 가격 + 사용자 제보 -->
@@ -139,9 +139,10 @@
           <div class="segmented wide" id="priceOrder" role="group" aria-label="정렬">
             <button type="button" data-order="pop" aria-pressed="true">추천순</button>
             <button type="button" data-order="low" aria-pressed="false">낮은 가격순</button>
-            <button type="button" data-order="report" aria-pressed="false">최근 제보순</button>
+            <button type="button" data-order="high" aria-pressed="false">높은 가격순</button>
           </div>
         </div>
+        <div class="season-banner" id="priceSeason" hidden></div>
         <div class="price-list" id="priceItems"></div>
         <div class="cheap-places" id="priceCheap" hidden></div>
         <p class="data-line" id="priceItemsLine"></p>
@@ -171,7 +172,7 @@
 
   <footer class="app-footer">
     <div class="warn-line">지나친 음주는 건강을 해쳐요 · 19세 미만 판매 금지 · 음주운전은 범죄예요</div>
-    매장 위치: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자 · 동네 술 가게: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a> · 소주·맥주·막걸리 가격: 한국소비자원 참가격 · 와인·위스키 가격: 참고 가격대와 사용자 제보 (대략적인 값이에요)
+    매장 위치: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자 · 동네 술 가게: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a> · 소주·맥주·막걸리 가격: 한국소비자원 참가격 · 와인·위스키 가격: 직접 정리한 참고 가격대 (대략적인 값이에요)
   </footer>
 
   <!-- 나이 확인 -->

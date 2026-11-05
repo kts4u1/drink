@@ -122,10 +122,9 @@ export async function handleIdentify({ body, ip = 'unknown' }, { identifier, sto
 }
 
 /** GET /api/health */
-export function healthBody({ identifier, dailyLimit, prices = false }) {
+export function healthBody({ identifier, dailyLimit }) {
   return {
     ok: true,
-    prices: Boolean(prices), // 가격 제보 (/api/prices)
     identify: Boolean(identifier),
     provider: identifier ? identifier.provider || 'anthropic' : null,
     free: Boolean(identifier?.free),
