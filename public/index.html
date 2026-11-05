@@ -123,38 +123,55 @@
 
     <!-- 최저가 -->
     <section class="view" id="view-prices" role="tabpanel" aria-labelledby="tab-prices" hidden>
-      <h1 class="view-title">💸 내 주변 최저가</h1>
-      <p class="view-lead">한국소비자원 참가격이 매주 조사한 실제 판매 가격이에요. 소주·맥주·막걸리를 어디서 사면 싼지 비교해 보세요.</p>
-      <div class="panel filters">
-        <div class="chip-row" id="priceKinds" role="group" aria-label="술 종류"></div>
-        <div class="chip-row product-chips" id="priceProducts" role="group" aria-label="상품"></div>
-        <div class="filter-label">반경</div>
-        <div class="radius-group" id="priceRadius" role="group" aria-label="반경 선택"></div>
-        <div class="segmented wide" id="priceSortToggle" role="group" aria-label="정렬">
-          <button type="button" data-sort="price" aria-pressed="true">싼 순</button>
-          <button type="button" data-sort="distance" aria-pressed="false">가까운 순</button>
+      <h1 class="view-title">💸 최저가</h1>
+      <p class="view-lead" id="priceLead">와인·위스키·양주는 같은 술도 매장마다 값이 크게 달라요. 얼마면 싼 편인지, 다른 사람들이 어디서 얼마에 봤는지 확인하고 내가 본 가격도 알려 주세요.</p>
+      <div class="chip-row group-chips" id="priceGroups" role="group" aria-label="술 종류"></div>
+
+      <!-- 와인·위스키·양주: 참고 가격 + 사용자 제보 -->
+      <div id="pricePremium">
+        <div class="panel filters">
+          <label class="searchbar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <span class="sr-only">제품 이름으로 찾기</span>
+            <input type="search" id="priceSearch" placeholder="예) 발베니, 블루 라벨, 몬테스, 돔 페리뇽" autocomplete="off">
+          </label>
+          <div class="chip-row" id="priceBudget" role="group" aria-label="가격대"></div>
+          <div class="segmented wide" id="priceOrder" role="group" aria-label="정렬">
+            <button type="button" data-order="pop" aria-pressed="true">추천순</button>
+            <button type="button" data-order="low" aria-pressed="false">낮은 가격순</button>
+            <button type="button" data-order="report" aria-pressed="false">최근 제보순</button>
+          </div>
         </div>
+        <div class="price-list" id="priceItems"></div>
+        <div class="cheap-places" id="priceCheap" hidden></div>
+        <p class="data-line" id="priceItemsLine"></p>
       </div>
-      <div id="priceHero"></div>
-      <div class="notice" id="priceNotice" hidden></div>
-      <div class="price-list" id="priceList"></div>
-      <button type="button" class="more-button" id="priceMore" hidden>더 보기</button>
-      <div class="cvs-box" id="priceCvs" hidden></div>
-      <p class="data-line" id="priceDataLine"></p>
-      <div class="block">
-        <h2>와인·위스키는요?</h2>
-        <p class="lead" style="margin:0 0 10px">와인·위스키는 공공 가격 조사 자료가 없어요. 대신 제품별 참고 가격대와 싸게 살 수 있는 곳을 알려드려요.</p>
-        <div class="link-grid">
-          <a class="primary" href="#find">🔎 술 찾기에서 참고 가격 보기</a>
-          <a href="#guide/buy">💸 싸게 사는 법</a>
+
+      <!-- 소주·맥주·막걸리: 한국소비자원 참가격 -->
+      <div id="priceDaily" hidden>
+        <div class="panel filters">
+          <div class="chip-row" id="priceKinds" role="group" aria-label="술 종류"></div>
+          <div class="chip-row product-chips" id="priceProducts" role="group" aria-label="상품"></div>
+          <div class="filter-label">반경</div>
+          <div class="radius-group" id="priceRadius" role="group" aria-label="반경 선택"></div>
+          <div class="segmented wide" id="priceSortToggle" role="group" aria-label="정렬">
+            <button type="button" data-sort="price" aria-pressed="true">싼 순</button>
+            <button type="button" data-sort="distance" aria-pressed="false">가까운 순</button>
+          </div>
         </div>
+        <div id="priceHero"></div>
+        <div class="notice" id="priceNotice" hidden></div>
+        <div class="price-list" id="priceList"></div>
+        <button type="button" class="more-button" id="priceMore" hidden>더 보기</button>
+        <div class="cvs-box" id="priceCvs" hidden></div>
+        <p class="data-line" id="priceDataLine"></p>
       </div>
     </section>
   </main>
 
   <footer class="app-footer">
     <div class="warn-line">지나친 음주는 건강을 해쳐요 · 19세 미만 판매 금지 · 음주운전은 범죄예요</div>
-    매장 위치: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자 · 동네 술 가게: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a> · 가격: 한국소비자원 참가격 · 참고 가격은 대략적인 범위예요
+    매장 위치: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자 · 동네 술 가게: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a> · 소주·맥주·막걸리 가격: 한국소비자원 참가격 · 와인·위스키 가격: 참고 가격대와 사용자 제보 (대략적인 값이에요)
   </footer>
 
   <!-- 나이 확인 -->

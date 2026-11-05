@@ -285,7 +285,9 @@ export function matchBrands(rawText, brands, votes = null) {
   for (const brand of brands) {
     let best = 0;
     let matched = '';
-    for (const raw of [...brand.names, brand.ko]) {
+    // "더 글렌리벳"처럼 앞에 '더'가 붙은 한글 이름은 '더' 없이도 (사람들은 "글렌리벳"이라고 많이 씀)
+    const kos = brand.ko.startsWith('더 ') ? [brand.ko, brand.ko.slice(2)] : [brand.ko];
+    for (const raw of [...brand.names, ...kos]) {
       const name = prepName(raw);
       if (name.length < 2) continue;
       let score = 0;
@@ -490,14 +492,19 @@ function catalogProduct(products, brand, attrs, text, cat) {
   if (attrs.age) {
     const withAge = candidates.filter((p) => new RegExp(`(^|\\D)${attrs.age}\\s*(년|years?)`, 'i').test(`${p.name} ${p.en}`));
     if (withAge.length === 1) return withAge[0];
-    if (withAge.length) candidates.splice(0, candidates.length, ...withAge);
+    // 라벨은 30년인데 목록에는 12년뿐이면 12년 가격을 보여 주면 안 됨 → 다른 연수가 적힌 제품은 뺌
+    const keep = withAge.length ? withAge : candidates.filter((p) => !/\d+\s*년|\b\d{2}\b/.test(`${p.name} ${p.en}`));
+    if (!keep.length) return null;
+    candidates.splice(0, candidates.length, ...keep);
   }
   if (candidates.length === 1) return candidates[0];
   // 여러 개면 라벨 글자와 겹치는 단어(블랙·레드·12 등)가 가장 많은 것, 비기면 고르지 않음
-  const words = new Set(prepName(text).split(' ').filter((w) => w.length >= 3));
+  // (한글 두 글자 "블루"·"골드", 숫자 두 자리 "15"도 뜻이 있는 단어)
+  const meaningful = (w) => w.length >= 3 || /^[가-힣]{2}$|^\d{2}$/.test(w);
+  const words = new Set(prepName(text).split(' ').filter(meaningful));
   const brandWords = new Set((brand ? [brand.ko, ...brand.names] : []).flatMap((n) => prepName(n).split(' ')));
   const scored = candidates
-    .map((p) => ({ p, s: [...new Set(prepName(`${p.name} ${p.en || ''}`).split(' '))].filter((w) => w.length >= 3 && !brandWords.has(w) && words.has(w)).length }))
+    .map((p) => ({ p, s: [...new Set(prepName(`${p.name} ${p.en || ''}`).split(' '))].filter((w) => meaningful(w) && !brandWords.has(w) && words.has(w)).length }))
     .sort((x, y) => y.s - x.s);
   return scored[0].s > 0 && scored[0].s > (scored[1]?.s ?? -1) ? scored[0].p : null;
 }

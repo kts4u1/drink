@@ -2,6 +2,7 @@
 // 1) 무료 AI: Cloudflare Worker 가 있으면 Workers AI(하루 무료 할당량)로 분석
 // 2) 기기 안 분석: Worker 가 없거나 무료 사용량이 끝나면, 휴대폰 안에서 바코드·라벨 글자를 읽어 브랜드 사전과 맞춤
 // 이름만 적어 물어볼 수도 있어요. AI 가 만든 글은 그대로 믿지 않고 모두 글자로만(escapeHtml) 화면에 넣습니다.
+import { apiConfig, apiHealth, apiUrl } from './api.js';
 import { BRANDS } from './content/brands.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, PRODUCTS } from './content/index.js';
 import { CONFIDENCE_LABELS, cleanQueryText, displayName, normalizeResult, priceQuery } from './lib/identify.js';
@@ -17,8 +18,6 @@ const MAX_PHOTOS = 3;
 const HISTORY_KEY = 'snapHistory';
 const HISTORY_MAX = 20;
 
-let apiBase = null; // null = 아직 모름
-let hasApi = true; // 배포본에 Worker 주소가 없으면 false
 let ai = null; // null = 확인 중, false = 없음, { provider, free, model } = 서버 AI 사용 가능
 let tray = []; // [{ dataUrl, preview, thumb }]
 let busy = false;
@@ -35,35 +34,9 @@ function aiLabel() {
 
 // ---------- 설정·상태 ----------
 
-async function loadConfig() {
-  if (apiBase !== null) return apiBase;
-  try {
-    const res = await fetch('config.json', { cache: 'no-store' });
-    const cfg = res.ok ? await res.json() : {};
-    apiBase = String(cfg.apiBase || '').replace(/\/+$/, '');
-    hasApi = cfg.api !== false;
-  } catch {
-    apiBase = '';
-  }
-  return apiBase;
-}
-
-const apiUrl = (path) => `${apiBase || ''}${apiBase ? '' : '.'}/api/${path}`;
-
 async function checkHealth() {
-  await loadConfig();
-  if (!hasApi) {
-    ai = false;
-    renderStatus();
-    return;
-  }
-  try {
-    const res = await fetch(apiUrl('health'), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
-    const body = res.ok ? await res.json() : null;
-    ai = body?.identify ? { provider: body.provider, free: body.free, model: body.model } : false;
-  } catch {
-    ai = false;
-  }
+  const body = await apiHealth();
+  ai = body?.identify ? { provider: body.provider, free: body.free, model: body.model } : false;
   renderStatus();
 }
 
@@ -188,6 +161,7 @@ function errorHtml(message, retry) {
 const FALLBACK_CODES = new Set(['free_quota', 'daily_limit', 'rate_limited', 'upstream', 'network', 'not_configured', 'bad_json', 'max_tokens', 'server']);
 
 async function viaServer({ images, text }) {
+  await apiConfig();
   const res = await fetch(apiUrl('identify'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

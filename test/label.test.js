@@ -205,7 +205,12 @@ test('가격대: 오래 숙성한 위스키·코냑 XO 는 올려 잡음', () =>
   const old = analyzeName('발렌타인 30년');
   assert.match(old.name_ko, /발렌타인/);
   assert.ok(old.price.krw_low >= 200000, `${old.price.krw_low}`);
-  assert.match(old.price.basis, /30년급/);
+  assert.match(old.price.basis, /발렌타인 30년/); // 제품 목록에 있는 제품이면 그 참고 가격
+  assert.ok(old.price.krw_low >= 400000, `${old.price.krw_low}`);
+  // 목록에 없는 30년은 연수로 올려 잡음
+  const glen = analyzeName('글렌리벳 30년');
+  assert.ok(glen.price.krw_low >= 200000, `${glen.price.krw_low}`);
+  assert.match(glen.price.basis, /30년급/);
   assert.ok(analyzeName('발렌타인 파이니스트').price.krw_high <= 90000);
 });
 
@@ -221,4 +226,16 @@ test('위스키 사전 2차: 독립 병입사 라벨은 원래 증류소, 새 �
   assert.ok(!matchBrands('Middleton Estate Pinot Noir Martinborough red wine', BRANDS, extractAttributes('Middleton Estate Pinot Noir red wine').votes).some((h) => h.brand.ko === '미들턴' && h.score >= 6));
   const whisky = BRANDS.filter((b) => b.cat === 'whisky').length;
   assert.ok(whisky >= 220, `위스키 ${whisky}곳`);
+});
+
+test('제품 목록 고르기: 연수가 다르면 고르지 않고, 블루·15 같은 짧은 단어도 봄', () => {
+  // 목록에 10년만 있을 때 30년 라벨에 10년 가격을 붙이지 않음
+  const g30 = analyzeName('글렌모렌지 30년');
+  assert.doesNotMatch(g30.name_ko, /10년/);
+  assert.ok(g30.price.krw_low >= 200000, `${g30.price.krw_low}`);
+  assert.match(analyzeName('조니워커 블루').name_ko, /블루 라벨/);
+  assert.match(analyzeName('글렌피딕 15').name_ko, /15년/);
+  assert.match(analyzeName('맥캘란 18년').name_ko, /18년 셰리/);
+  // "더" 없이 적어도 브랜드를 찾음
+  assert.match(analyzeName('글렌리벳').name_ko, /글렌리벳/);
 });

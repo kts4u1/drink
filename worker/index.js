@@ -1,6 +1,7 @@
 // Cloudflare Worker: 사진으로 술 알아보기 API (무료 AI)
 //   POST /api/identify   사진(최대 3장) 또는 이름 → Claude 가 알아본 결과
 //   GET  /api/health     설정 상태
+//   GET  /api/prices[/id] 사용자 가격 제보 보기, POST /api/prices 제보하기 (KV 에 저장)
 //
 // 화면은 GitHub Pages(https://kts4u1.github.io/drink/)에 있고 이 Worker 는 API 만 맡습니다.
 // 기본은 Cloudflare Workers AI 의 무료 하루 할당량을 써서 돈이 들지 않아요. (유료 Claude 는 선택)
@@ -17,6 +18,7 @@
 //   vars.WORLD_URL        세계 술 데이터 주소 (GitHub Pages 의 data/world, 작은 조각 파일을 필요한 것만 받음)
 import { DEFAULT_MODEL, createIdentifier } from '../server/identify/claude.js';
 import { createMemoryStore, handleIdentify, healthBody } from '../server/identify/handler.js';
+import { handlePriceGet, handlePriceReport } from '../server/prices/handler.js';
 import { DEFAULT_WORKERS_AI_MODEL, createWorkersAiIdentifier } from '../server/identify/workers-ai.js';
 import { CATEGORY_BY_ID } from '../public/js/content/index.js';
 import { createWorld } from '../public/js/lib/world.js';
@@ -116,7 +118,28 @@ export default {
     const identifier = identifierForEnv(env);
 
     if (url.pathname === '/api/health' && request.method === 'GET') {
-      return json(healthBody({ identifier, dailyLimit }), 200, origin);
+      return json(healthBody({ identifier, dailyLimit, prices: Boolean(env.CACHE) }), 200, origin);
+    }
+
+    // 사용자 가격 제보 (와인·위스키 등)
+    if (url.pathname === '/api/prices' || url.pathname.startsWith('/api/prices/')) {
+      const store = env.CACHE ? kvStore(env.CACHE) : null;
+      if (request.method === 'GET') {
+        const id = decodeURIComponent(url.pathname.slice('/api/prices/'.length));
+        const { status, body: out } = await handlePriceGet({ id }, { store });
+        return json(out, status, origin);
+      }
+      if (request.method !== 'POST') return json({ error: 'GET 또는 POST 로 보내 주세요.' }, 405, origin);
+      if (!origin) return json({ error: '허용되지 않은 주소에서 온 요청이에요.', code: 'forbidden_origin' }, 403, null);
+      if (Number(request.headers.get('Content-Length') || 0) > 4096) return json({ error: '요청이 너무 커요.', code: 'too_large' }, 413, origin);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: '요청 형식이 올바르지 않아요.', code: 'bad_input' }, 400, origin);
+      }
+      const { status, body: out } = await handlePriceReport({ body, ip: request.headers.get('CF-Connecting-IP') || 'unknown' }, { store });
+      return json(out, status, origin);
     }
 
     if (url.pathname === '/api/identify') {

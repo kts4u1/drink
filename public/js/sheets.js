@@ -1,8 +1,10 @@
 // 상세 화면 (제품, 매장) - 하나의 바텀시트를 같이 씁니다
+import { pricesEnabled, productReports, sendPriceReport } from './api.js';
 import { BUY_BY_CATEGORY, CATEGORY_BY_ID, CHANNELS, STORE_KINDS, TAG_LABELS } from './content/index.js';
 import { loadPrices, loadStores } from './data.js';
 import { distanceKm, fmtDistance, walkMinutes } from './lib/geo.js';
 import { comparePrices, matchKcaProducts, nearestStores, pricesAtStore } from './lib/nearby.js';
+import { VERDICT_LABEL, goodPrice, parseWon, priceBounds, priceProducts, reportRows, timeAgo } from './lib/prices.js';
 import { areaPrefix, mapSearchLinks, placeLinks, placeName } from './place.js';
 import { channelCard } from './render.js';
 import { state } from './state.js';
@@ -71,6 +73,20 @@ export function initSheets() {
       if (s) openStore(s);
     }
   });
+  // 가격 제보: 매장을 "직접 적기"로 고르면 이름 칸을 보여 줌
+  body().addEventListener('change', (e) => {
+    const sel = e.target.closest('[data-report-form] select[name="storeId"]');
+    if (!sel) return;
+    const custom = sel.form.querySelector('[data-store-name]');
+    custom.hidden = sel.value !== OTHER_STORE;
+    if (!custom.hidden) custom.querySelector('input').focus();
+  });
+  body().addEventListener('submit', (e) => {
+    const form = e.target.closest('[data-report-form]');
+    if (!form) return;
+    e.preventDefault();
+    submitReport(form);
+  });
 }
 
 function kindEmoji(k) {
@@ -94,13 +110,21 @@ export function productBuyChannels(product) {
   return product.where.map((ch) => base.find((b) => b.ch === ch) || { ch, score: 4 });
 }
 
-export async function openProduct(product) {
+/** 와인·위스키·양주처럼 공공 가격 자료가 없어서 가격 비교·제보를 하는 제품인지 */
+export const canComparePrice = (product) => priceProducts([product]).length > 0;
+
+/** 데일리샷(주류 픽업 앱) 검색 — 앱 전용가·픽업 매장 확인 (링크만) */
+export const dailyshotUrl = (name) => `https://dailyshot.co/m/search/result?q=${encodeURIComponent(String(name).replace(/\s*\(.*?\)\s*/g, ' ').trim())}`;
+
+/** focus: 'price' 면 가격 비교를 맨 위에 (최저가 탭에서 열 때) */
+export async function openProduct(product, { focus = '' } = {}) {
   const cat = CATEGORY_BY_ID[product.cat];
   const color = CATEGORY_COLORS[product.cat];
   const channels = productBuyChannels(product);
   const tags = (product.tags || []).map((t) => `<span class="tag">${escapeHtml(TAG_LABELS[t] || t)}</span>`).join('');
   const searchQuery = `${product.name} 가격`;
   const shopWord = SHOP_WORDS[product.cat] || '주류 판매점';
+  const comparable = canComparePrice(product);
   const html = `
     <div class="sheet-hero">
       <div class="em" aria-hidden="true">${cat?.emoji || '🍾'}</div>
@@ -123,9 +147,11 @@ export async function openProduct(product) {
         <div>진하기 <span class="bar"><i style="width:${product.body * 20}%"></i></span></div>
       </div>
       ${tags ? `<div class="tag-row" style="margin-top:10px">${tags}</div>` : ''}
+      ${comparable && focus === 'price' ? priceBoxHtml(product) : ''}
       <div class="sheet-section"><h3>어떤 맛이에요?</h3><p>${escapeHtml(product.notes)}</p></div>
       ${product.serve ? `<div class="sheet-section"><h3>이렇게 마셔요</h3><p>${escapeHtml(product.serve)}</p></div>` : ''}
       ${product.pair ? `<div class="sheet-section"><h3>어울리는 음식</h3><p>${escapeHtml(product.pair)}</p></div>` : ''}
+      ${comparable && focus !== 'price' ? priceBoxHtml(product) : ''}
       <div id="sheetKca"></div>
       <div class="sheet-section">
         <h3>어디서 사면 좋을까 <small>가까운 곳도 함께 보여드려요</small></h3>
@@ -136,6 +162,7 @@ export async function openProduct(product) {
         <h3>가격·파는 곳 더 찾아보기</h3>
         <div class="link-grid">
           <a class="primary" href="https://search.naver.com/search.naver?query=${encodeURIComponent(searchQuery)}" target="_blank" rel="noopener">${ICON.search}네이버에서 가격 검색</a>
+          ${comparable ? `<a href="${dailyshotUrl(product.name)}" target="_blank" rel="noopener">${ICON.search}데일리샷 픽업 가격</a>` : ''}
           <a href="#guide/${escapeHtml(product.cat)}">${cat?.emoji || ''} ${escapeHtml(cat?.name || '')} 알아보기</a>
           <a id="sheetKakaoSearch" href="${mapSearchLinks(shopWord).kakao}" target="_blank" rel="noopener">${ICON.map}근처 ${escapeHtml(shopWord)} (카카오맵)</a>
           <a id="sheetNaverSearch" href="${mapSearchLinks(shopWord).naver}" target="_blank" rel="noopener">${ICON.map}근처 ${escapeHtml(shopWord)} (네이버지도)</a>
@@ -146,6 +173,129 @@ export async function openProduct(product) {
   const t = openSheet(html, color);
   fillProductNearby(product, channels, t);
   if (product.kca) fillProductKca(product, t);
+  if (comparable) fillProductReports(product, t);
+}
+
+// ---------- 가격 비교·제보 (와인·위스키·양주) ----------
+
+const OTHER_STORE = '__other';
+// 제보할 때 고를 수 있는 가까운 매장 종류 (와인·위스키를 파는 곳)
+const REPORT_STORE_KINDS = ['warehouse', 'mart', 'shop', 'department', 'super'];
+let reportCtx = null; // { product, near, t }
+
+/** 얼마면 싼 편인지 + 다른 사람들이 본 가격 자리 */
+function priceBoxHtml(product) {
+  const [lo, hi] = product.price;
+  const good = goodPrice(product);
+  return `<div class="sheet-section price-box">
+      <h3>얼마면 싸게 사는 걸까? <small>${product.ml ? `${product.ml}ml ` : ''}한 병 기준</small></h3>
+      <div class="price-scale">
+        <div class="v-cheap"><small>싼 편</small><b>${fmtWon(good)} 이하</b></div>
+        <div class="v-normal"><small>보통</small><b>~${fmtWon(hi)}</b></div>
+        <div class="v-pricey"><small>비싼 편</small><b>${fmtWon(hi)} 넘게</b></div>
+      </div>
+      <p class="note">참고 가격 ${fmtWon(lo)}~${fmtWon(hi)} (국내 마트·전문점의 대략적인 범위). 창고형 마트·주류 할인점·마트 행사가 싼 편이고, 편의점·백화점은 비싼 편이에요.</p>
+      <div id="sheetReports"></div>
+    </div>`;
+}
+
+async function fillProductReports(product, t) {
+  if (!(await pricesEnabled())) return;
+  const loc = state.location;
+  const [reports, stores] = await Promise.all([productReports(product.id), loc ? loadStores().then((d) => d.stores).catch(() => []) : []]);
+  if (!current(t) || reports == null) return;
+  const near = loc ? nearestStores(stores, loc, { kinds: REPORT_STORE_KINDS, limit: 12, maxKm: 5 }) : [];
+  reportCtx = { product, near, t, stores };
+  renderReports(reports);
+}
+
+function renderReports(reports) {
+  const { product, near, stores } = reportCtx;
+  const box = document.getElementById('sheetReports');
+  if (!box) return;
+  const byId = new Map(stores.map((s) => [s.id, s]));
+  // 목록에 있는 매장이면 저장된 대략 위치(100m 단위) 대신 매장의 정확한 위치로 거리 계산
+  const exact = (reports || []).map((r) => {
+    const s = r.sid && byId.get(r.sid);
+    return s ? { ...r, la: s.la, lo: s.lo } : r;
+  });
+  const rows = reportRows(product, exact, state.location);
+  const list = rows.length
+    ? `<div class="price-list">${rows
+        .slice(0, 8)
+        .map((r, i) => {
+          const tag = r.sid && byId.has(r.sid) ? `button type="button" data-store-id="${escapeHtml(r.sid)}"` : 'div';
+          return `<${tag} class="price-row${i === 0 ? ' best' : ''}">
+            <span class="rank">${i + 1}</span>
+            <span class="n"><b>${escapeHtml(r.s)}</b><small>${timeAgo(r.t)}${r.d != null ? ` · ${fmtDistance(r.d)}` : ''}${r.ml && product.ml && r.ml !== product.ml ? ` · ${r.ml}ml` : ''}</small></span>
+            <span class="p"><b>${fmtWon(r.p)}</b><small class="v-${r.verdict}">${VERDICT_LABEL[r.verdict]}</small></span>
+          </${tag.split(' ')[0]}>`;
+        })
+        .join('')}</div>`
+    : '<p class="empty-line">아직 제보가 없어요. 매장에서 본 가격을 처음으로 알려 주세요!</p>';
+  const example = Math.round(goodPrice(product) / 1000) * 1000 || goodPrice(product);
+  box.innerHTML = `
+    <h4>다른 사람들이 본 가격 <small>최근 120일${rows.length ? ` · ${rows.length}건` : ''}</small></h4>
+    ${list}
+    <form class="report-form" data-report-form novalidate>
+      <h4>💬 매장에서 본 가격 알려 주기</h4>
+      <label class="field"><span>가격</span><input name="price" inputmode="numeric" autocomplete="off" enterkeyhint="done" placeholder="예) ${example.toLocaleString('ko-KR')} 또는 ${escapeHtml(manText(example))}"></label>
+      ${
+        near.length
+          ? `<label class="field"><span>매장</span><select name="storeId">
+              <option value="">가까운 매장 고르기</option>
+              ${near.map((s) => `<option value="${escapeHtml(s.id)}">${kindEmoji(s.k)} ${escapeHtml(s.n)} · ${fmtDistance(s.d)}</option>`).join('')}
+              <option value="${OTHER_STORE}">목록에 없어요 (직접 적기)</option>
+            </select></label>`
+          : ''
+      }
+      <label class="field" data-store-name ${near.length ? 'hidden' : ''}><span>매장 이름</span><input name="store" maxlength="40" autocomplete="off" placeholder="예) 트레이더스 월계점"></label>
+      <button type="submit" class="primary-button">제보하기</button>
+      <p class="form-msg" role="status" aria-live="polite"></p>
+      <p class="note">${product.ml ? `${product.ml}ml ` : ''}한 병 가격을 적어 주세요. 행사·할인가도 좋아요. 매장 이름·위치만 저장하고 내 위치는 저장하지 않아요. 다른 사람이 본 가격이라 지금과 다를 수 있어요.</p>
+    </form>`;
+}
+
+// 129000 → "12만 9천"
+function manText(n) {
+  const man = Math.floor(n / 10000);
+  const cheon = Math.round((n % 10000) / 1000);
+  return `${man ? `${man}만` : ''}${man && cheon ? ' ' : ''}${cheon ? `${cheon}천` : ''}` || String(n);
+}
+
+async function submitReport(form) {
+  if (!reportCtx || !current(reportCtx.t)) return;
+  const { product, near } = reportCtx;
+  const msg = form.querySelector('.form-msg');
+  const say = (text, bad = true) => {
+    msg.textContent = text;
+    msg.classList.toggle('bad', bad);
+  };
+  const price = parseWon(form.elements.price.value);
+  if (!Number.isFinite(price) || price <= 0) return say('가격을 숫자로 적어 주세요. (예: 129000 또는 12만 9천)');
+  const [min, max] = priceBounds(product);
+  if (price < min || price > max) return say(`참고 가격(${fmtWon(product.price[0])}~${fmtWon(product.price[1])})과 너무 달라요. 같은 제품·용량이 맞는지 확인해 주세요.`);
+  const picked = form.elements.storeId?.value || '';
+  const report = { id: product.id, price, ml: product.ml || undefined };
+  if (picked && picked !== OTHER_STORE) {
+    const s = near.find((x) => x.id === picked);
+    if (!s) return say('매장을 다시 골라 주세요.');
+    Object.assign(report, { store: s.n, storeId: s.id, la: s.la, lo: s.lo });
+  } else {
+    if (near.length && !picked) return say('어느 매장인지 골라 주세요.');
+    report.store = form.elements.store.value.trim();
+    if (report.store.length < 2) return say('매장 이름을 적어 주세요.');
+  }
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  say('보내는 중…', false);
+  const res = await sendPriceReport(report);
+  button.disabled = false;
+  if (!res.ok) return say(res.error);
+  toast(res.duplicate ? '같은 제보가 이미 있어요. 고마워요!' : '고마워요! 다른 사람들이 싸게 사는 데 도움이 돼요 🙌');
+  document.dispatchEvent(new CustomEvent('prices:reported', { detail: { id: product.id, summary: res.summary } }));
+  const reports = await productReports(product.id);
+  if (reports && current(reportCtx.t)) renderReports(reports);
 }
 
 /** 구매처 카드 안에 가장 가까운 매장, 지도 앱 검색 링크에 동네 이름 채우기 (product 는 cat 만 있으면 됨) */
