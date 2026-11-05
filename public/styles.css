@@ -510,7 +510,9 @@ dialog.loc-sheet { width: min(440px, 100vw); }
 .searchbar input {
   width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 14px;
   padding: 13px 14px 13px 42px; font-size: 16px; box-shadow: var(--shadow);
+  color: var(--text); /* 흰 글씨 영역(백과 첫 화면) 안에 있어도 글자가 보이게 */
 }
+.searchbar input::placeholder { color: var(--muted); opacity: 1; }
 .searchbar input:focus { outline: 2px solid var(--brand); outline-offset: 0; border-color: transparent; }
 
 /* 백과 첫 화면 */
