@@ -57,6 +57,14 @@ export function priceVerdict(product, price) {
 }
 export const VERDICT_LABEL = { cheap: '싼 편', normal: '보통', pricey: '비싼 편' };
 
+/** 참고 가격을 언제 무엇으로 확인했는지 ("2026년 11월 공개 판매가로 확인") */
+export function checkedText(product) {
+  const m = /^(\d{4})-(\d{2})$/.exec(product.checked || '');
+  if (!m) return '확인할 판매가를 못 찾아 짐작한 값';
+  const when = `${m[1]}년 ${Number(m[2])}월`;
+  return product.kca ? `한국소비자원 참가격 ${when} 조사 기준` : `${when}에 공개된 판매가로 확인`;
+}
+
 /** 목록 정렬: pop(추천순 = 목록 순서) | low(낮은 가격순) | high(높은 가격순) */
 export function sortPriceProducts(list, order) {
   if (order === 'low') return [...list].sort((a, b) => a.price[0] - b.price[0] || a.price[1] - b.price[1]);

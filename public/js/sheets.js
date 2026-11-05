@@ -3,7 +3,7 @@ import { BUY_BY_CATEGORY, CATEGORY_BY_ID, CHANNELS, SHOP_TYPES, STORE_KINDS, TAG
 import { loadPrices, loadStores } from './data.js';
 import { distanceKm, fmtDistance, walkMinutes } from './lib/geo.js';
 import { comparePrices, matchKcaProducts, nearestStores, pricesAtStore, storeFilter, storesWithin } from './lib/nearby.js';
-import { DUTY_FREE_CATS, VERDICT_LABEL, channelPrices, goodPrice, livePriceLinks, priceProducts, saleSeasons, seasonText } from './lib/prices.js';
+import { DUTY_FREE_CATS, VERDICT_LABEL, channelPrices, checkedText, goodPrice, livePriceLinks, priceProducts, saleSeasons, seasonText } from './lib/prices.js';
 import { areaPrefix, mapSearchLinks, placeLinks, placeName } from './place.js';
 import { channelCard } from './render.js';
 import { state } from './state.js';
@@ -152,7 +152,7 @@ export async function openProduct(product, { focus = '' } = {}) {
           <a id="sheetKakaoSearch" href="${mapSearchLinks(shopWord).kakao}" target="_blank" rel="noopener">${ICON.map}근처 ${escapeHtml(shopWord)} (카카오맵)</a>
           <a id="sheetNaverSearch" href="${mapSearchLinks(shopWord).naver}" target="_blank" rel="noopener">${ICON.map}근처 ${escapeHtml(shopWord)} (네이버지도)</a>
         </div>
-        <p class="note">참고 가격은 국내 마트·전문점 기준의 대략적인 범위예요. 매장·행사·시기마다 크게 달라요. 재고는 매장에 전화로 확인하세요.</p>
+        <p class="note">참고 가격은 국내 마트·전문점 기준의 대략적인 범위예요 (${escapeHtml(checkedText(product))}). 매장·행사·시기마다 크게 달라요. 재고는 매장에 전화로 확인하세요.</p>
       </div>
     </div>`;
   const t = openSheet(html, color);
@@ -196,7 +196,7 @@ function priceBoxHtml(product) {
       <div class="live-links">${livePriceLinks(product)
         .map((l) => `<a class="live-${l.id}" href="${escapeHtml(l.url)}" target="_blank" rel="noopener"><b>${escapeHtml(l.label)}</b><small>${escapeHtml(l.desc)}</small></a>`)
         .join('')}</div>
-      <p class="note">참고 가격 ${fmtWon(lo)}~${fmtWon(hi)}은 국내 마트·전문점 판매가의 대략적인 범위예요. 판매처별 값은 이 범위를 보통 싼 순서(창고형 마트 → 대형마트 → 전문점 → 편의점·백화점)대로 나눈 짐작이라, 정확한 오늘 가격은 위 사이트에서 확인하세요.</p>
+      <p class="note">참고 가격 ${fmtWon(lo)}~${fmtWon(hi)}은 국내 마트·전문점 판매가의 대략적인 범위예요 (${escapeHtml(checkedText(product))}). 판매처별 값은 이 범위를 보통 싼 순서(창고형 마트 → 대형마트 → 전문점 → 편의점·백화점)대로 나눈 짐작이라, 정확한 오늘 가격은 위 사이트에서 확인하세요.</p>
     </div>`;
 }
 

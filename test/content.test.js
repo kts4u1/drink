@@ -49,6 +49,7 @@ test('제품: 종류·가격·맛 값이 올바름', () => {
     for (const t of p.tags || []) assert.ok(TAG_LABELS[t], `${p.id} tag ${t}`);
     for (const ch of p.where || []) assert.ok(CHANNELS[ch], `${p.id} where ${ch}`);
     if (p.kca) assert.doesNotThrow(() => new RegExp(p.kca), p.id);
+    if (p.checked != null) assert.match(p.checked, /^20\d{2}-(0[1-9]|1[0-2])$/, `${p.id} checked`);
   }
   // 술 종류마다 대표 제품이 하나는 있음 (칵테일 제외)
   for (const c of CATEGORIES.filter((x) => x.id !== 'cocktail')) assert.ok(PRODUCTS.some((p) => p.cat === c.id), `${c.id} 제품 없음`);

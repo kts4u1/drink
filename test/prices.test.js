@@ -5,6 +5,7 @@ import { PRODUCTS } from '../public/js/content/index.js';
 import { fmtWonShort } from '../public/js/util.js';
 import {
   BUDGETS,
+  checkedText,
   DUTY_FREE_CATS,
   HOLIDAYS,
   PRICE_GROUPS,
@@ -110,4 +111,27 @@ test('묶음·예산·정렬', () => {
   assert.ok(low[0].price[0] <= low.at(-1).price[0]);
   assert.ok(high[0].price[1] >= high.at(-1).price[1]);
   assert.equal(sortPriceProducts(whisky, 'pop'), whisky);
+});
+
+test('참고 가격 확인: 거의 모든 제품, 참가격 상품은 참가격 기준', () => {
+  const unchecked = PRODUCTS.filter((p) => !p.checked);
+  assert.ok(unchecked.length <= 5, unchecked.map((p) => p.id).join(', '));
+  assert.equal(checkedText(balvenie), '2026년 11월에 공개된 판매가로 확인');
+  assert.equal(checkedText(byId('cass')), '한국소비자원 참가격 2026년 10월 조사 기준');
+  assert.equal(checkedText({ price: [1, 2] }), '확인할 판매가를 못 찾아 짐작한 값');
+});
+
+test('참가격 상품의 참고 가격이 실제 조사 가격(전국 매장 대부분 + 편의점)을 담음', async () => {
+  const fs = await import('node:fs');
+  const data = JSON.parse(fs.readFileSync(new URL('../data/prices.json', import.meta.url)));
+  for (const p of PRODUCTS.filter((x) => x.kca)) {
+    const re = new RegExp(p.kca);
+    const kp = data.products.find((x) => !x.pack && re.test(x.name));
+    if (!kp) continue;
+    const xs = data.prices[kp.id].map((r) => r[1]).sort((a, b) => a - b);
+    const p10 = xs[Math.floor(0.1 * (xs.length - 1))];
+    const cvs = data.brands.filter((b) => b.type === '편의점').map((b) => b.prices[kp.id]?.[0]).filter(Boolean);
+    assert.ok(p.price[0] <= p10 * 1.1, `${p.id} 최저 ${p.price[0]} > 조사 ${p10}`);
+    if (cvs.length) assert.ok(p.price[1] >= Math.max(...cvs) * 0.9, `${p.id} 최고 ${p.price[1]} < 편의점 ${Math.max(...cvs)}`);
+  }
 });
