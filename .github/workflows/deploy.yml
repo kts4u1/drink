@@ -105,6 +105,12 @@ jobs:
           cache: npm
       - run: npm ci
 
+      # 동네 술 가게 (소상공인 상가정보): 분기마다 새 파일이 나오면 받고, 아니면 파일 날짜만 확인해요
+      - name: 동네 술 가게 받기 (소상공인 상가정보, 새 분기 파일일 때만)
+        run: npm run data:shops
+        continue-on-error: true
+        timeout-minutes: 15
+
       # 받다가 실패하거나 8분이 넘으면 저장소에 들어 있는 데이터로 배포해요
       # (OpenStreetMap 서버가 느린 날은 한없이 기다리다 배포 전체가 멈출 수 있어서)
       - name: 최신 데이터 받기 (참가격 술 가격 · OpenStreetMap 매장)

@@ -244,7 +244,7 @@ export async function openStore(store) {
         ${kind?.caution && (store.k !== 'shop' || /주류|상사|유통|도매/.test(store.n)) ? `<p class="note warn">${escapeHtml(kind.caution)}</p>` : ''}
       </div>
       <div id="sheetStorePrices"></div>
-      <p class="note">매장 정보: © OpenStreetMap 기여자${store.c ? ' · 가격: 한국소비자원 참가격' : ''}. 영업시간·휴무는 바뀔 수 있으니 지도 앱에서 한 번 더 확인하세요.</p>
+      <p class="note">매장 정보: ${String(store.id).startsWith('sm') ? '소상공인시장진흥공단 상가(상권)정보 (분기마다 갱신)' : '© OpenStreetMap 기여자'}${store.c ? ' · 가격: 한국소비자원 참가격' : ''}. 영업시간·휴무·폐업 여부는 바뀔 수 있으니 지도 앱에서 한 번 더 확인하세요.</p>
     </div>`;
   const t = openSheet(html);
   if (store.c) {

@@ -334,6 +334,11 @@ export function matchBrands(rawText, brands, votes = null) {
     }
   }
   hits.sort((a, b) => b.score - a.score);
+  // 독립 병입사(고든 앤 맥페일 등) 라벨에 원래 증류소 이름도 있으면 증류소가 더 중요한 정보 → 앞으로
+  if (hits[0]?.brand.bottler) {
+    const i = hits.findIndex((h) => !h.brand.bottler && h.brand.cat === hits[0].brand.cat && h.score >= 12);
+    if (i > 0) hits.unshift(hits.splice(i, 1)[0]);
+  }
   return hits;
 }
 

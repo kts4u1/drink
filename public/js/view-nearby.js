@@ -1,8 +1,8 @@
-// 내 주변 탭: 술 살 수 있는 곳 (OpenStreetMap + 참가격 조사 매장)
-import { STORE_KINDS, STORE_KIND_ORDER } from './content/index.js';
+// 내 주변 탭: 술 살 수 있는 곳 (OpenStreetMap + 소상공인 상가정보의 동네 술 가게 + 참가격 조사 매장)
+import { SHOP_TYPES, STORE_KINDS, STORE_KIND_ORDER } from './content/index.js';
 import { loadStores } from './data.js';
 import { fmtDistance } from './lib/geo.js';
-import { countByKind, countByRadius, sortStores, storesWithin } from './lib/nearby.js';
+import { shopTypeOf, sortStores, storeFilter, storesWithin } from './lib/nearby.js';
 import { pickLocationOnMap } from './location.js';
 import { KIND_COLORS, StoreMap } from './map.js';
 import { areaPrefix, mapSearchLinks, placeName } from './place.js';
@@ -14,6 +14,19 @@ const RADII = [1, 3, 5, 10, 20];
 const PAGE = 30;
 const prefs = { kind: 'all', radius: 5, sort: 'distance', view: 'list', ...storage.get('nearPrefs', {}) };
 if (!RADII.includes(prefs.radius)) prefs.radius = 5;
+const validKind = (k) => k === 'all' || Boolean(STORE_KINDS[k]) || SHOP_TYPES.some((t) => `shop:${t.id}` === k);
+if (!validKind(prefs.kind)) prefs.kind = 'all';
+const typeById = Object.fromEntries(SHOP_TYPES.map((t) => [t.id, t]));
+const shopType = (s) => typeById[shopTypeOf(s, SHOP_TYPES)];
+/** 고른 것 이름·검색어·주의 */
+function selection(key) {
+  if (key.startsWith('shop:')) {
+    const t = typeById[key.slice(5)];
+    return { name: t.name, search: t.search, caution: t.id === 'etc' ? STORE_KINDS.shop.caution : '' };
+  }
+  if (key === 'all') return { name: '술 살 수 있는 곳', search: ['와인샵', '보틀샵', '주류 할인점', '전통주'], caution: '' };
+  return { name: STORE_KINDS[key].name, search: STORE_KINDS[key].search, caution: STORE_KINDS[key].caution || '' };
+}
 
 let data = null;
 let shown = PAGE;
@@ -22,11 +35,23 @@ let lastItems = [];
 const els = {};
 const save = () => storage.set('nearPrefs', prefs);
 
-function kindChips(counts) {
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+/** 종류 칩: 전체 · 주류 전문점(와인샵·보틀샵·할인점·전통주로도 나눠 고르기) · 창고형 · 대형마트 … */
+function kindChips(within) {
+  const counts = {};
+  for (const s of within) {
+    counts[s.k] = (counts[s.k] || 0) + 1;
+    if (s.k === 'shop') {
+      const key = `shop:${shopTypeOf(s, SHOP_TYPES)}`;
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  }
+  const chip = (key, emoji, label) => `<button type="button" class="chip" data-kind="${key}">${emoji} ${escapeHtml(label)} <span class="count">${counts[key] || 0}</span></button>`;
   els.kinds.innerHTML = [
-    `<button type="button" class="chip" data-kind="all">전체 <span class="count">${total}</span></button>`,
-    ...STORE_KIND_ORDER.map((k) => `<button type="button" class="chip" data-kind="${k}">${STORE_KINDS[k].emoji} ${escapeHtml(STORE_KINDS[k].short)} <span class="count">${counts[k] || 0}</span></button>`),
+    `<button type="button" class="chip" data-kind="all">전체 <span class="count">${within.length}</span></button>`,
+    chip('shop', STORE_KINDS.shop.emoji, '주류 전문점'),
+    // 가게 종류는 반경 안에 있을 때만 (지금 고른 것은 늘 보임). "주류 판매점"은 주류 전문점에 들어 있어요
+    ...SHOP_TYPES.filter((t) => t.id !== 'etc' && (counts[`shop:${t.id}`] || prefs.kind === `shop:${t.id}`)).map((t) => chip(`shop:${t.id}`, t.emoji, t.short)),
+    ...STORE_KIND_ORDER.filter((k) => k !== 'shop').map((k) => chip(k, STORE_KINDS[k].emoji, STORE_KINDS[k].short)),
   ].join('');
   setPressed(els.kinds, 'data-kind', prefs.kind);
 }
@@ -45,11 +70,11 @@ function card(s) {
   const meta = s.a ? shortAddr(s.a) : kind.desc;
   return `
     <article class="card store-card k-${s.k}" role="button" tabindex="0" data-store="${escapeHtml(s.id)}" aria-label="${escapeHtml(s.n)} 자세히 보기">
-      <div class="thumb kind" aria-hidden="true">${kind.emoji}</div>
+      <div class="thumb kind" aria-hidden="true">${(s.k === 'shop' && shopType(s)?.emoji) || kind.emoji}</div>
       <div class="card-body">
         <div class="card-badges">
-          <span class="badge kind">${escapeHtml(kind.short)}</span>
-          ${s.b && s.b !== kind.name ? `<span class="badge plain">${escapeHtml(s.b)}</span>` : ''}
+          <span class="badge kind">${escapeHtml(s.k === 'shop' ? shopType(s)?.short || kind.short : kind.short)}</span>
+          ${s.b && s.b !== kind.name && !(s.k === 'shop' && shopType(s)?.labels.includes(s.b)) ? `<span class="badge plain">${escapeHtml(s.b)}</span>` : ''}
           ${s.c ? '<span class="badge good">참가격 조사</span>' : ''}
         </div>
         <h3 class="card-title">${escapeHtml(s.n)}</h3>
@@ -62,10 +87,10 @@ function card(s) {
 
 let moreToken = 0;
 function drawMoreSearch(prefix) {
-  const words = prefs.kind === 'all' ? ['와인샵', '보틀샵', '주류 할인점', '전통주'] : STORE_KINDS[prefs.kind].search;
+  const words = selection(prefs.kind).search;
   els.moreSearch.innerHTML = `
     <h3>지도 앱에서 더 찾기</h3>
-    <p>이 목록은 OpenStreetMap에 등록된 곳이라 동네 와인샵·보틀샵은 빠져 있을 수 있어요. ${prefix ? `<b>${escapeHtml(prefix)}</b> 근처를` : '근처를'} 카카오맵·네이버지도에서 바로 찾아보세요.</p>
+    <p>이 목록은 OpenStreetMap과 소상공인 상가정보에 등록된 곳이라, 새로 생긴 가게나 다른 업종으로 등록된 가게는 빠져 있을 수 있어요. ${prefix ? `<b>${escapeHtml(prefix)}</b> 근처를` : '근처를'} 카카오맵·네이버지도에서 바로 찾아보세요.</p>
     <div class="rows">${words
       .map((w) => {
         const links = mapSearchLinks(prefix ? `${prefix} ${w}` : w);
@@ -89,21 +114,24 @@ function render() {
   const loc = state.location;
   if (!data || !loc) return;
   const radius = prefs.radius;
-  const within = storesWithin(data.stores, loc, radius);
-  const counts = countByKind(within);
-  kindChips(counts);
-  radiusButtons(countByRadius(data.stores, loc, RADII, prefs.kind === 'all' ? null : [prefs.kind]));
+  const match = storeFilter(prefs.kind, SHOP_TYPES);
+  const widest = storesWithin(data.stores, loc, Math.max(...RADII));
+  const within = widest.filter((s) => s.d <= radius);
+  kindChips(within);
+  const chosen = widest.filter(match);
+  radiusButtons(Object.fromEntries(RADII.map((r) => [r, chosen.filter((s) => s.d <= r).length])));
   els.sort.value = prefs.sort;
   setPressed(els.viewToggle, 'data-view', prefs.view);
 
-  const list = sortStores(prefs.kind === 'all' ? within : within.filter((s) => s.k === prefs.kind), prefs.sort, STORE_KINDS);
+  const list = sortStores(within.filter(match), prefs.sort, STORE_KINDS, SHOP_TYPES);
   lastItems = list;
-  const what = prefs.kind === 'all' ? '술 살 수 있는 곳' : STORE_KINDS[prefs.kind].name;
+  const sel = selection(prefs.kind);
+  const what = sel.name;
   els.summary.innerHTML = `<strong>${escapeHtml(loc.label)}</strong> 기준 ${radius}km 안에 ${escapeHtml(what)} <strong>${list.length}곳</strong>${
     prefs.sort === 'cheap' ? ' <span class="muted">(싸게 사기 좋은 곳 먼저)</span>' : prefs.sort === 'variety' ? ' <span class="muted">(종류 많은 곳 먼저)</span>' : ''
   }`;
-  els.notice.hidden = prefs.kind === 'all' || !STORE_KINDS[prefs.kind].caution;
-  els.notice.textContent = prefs.kind !== 'all' ? STORE_KINDS[prefs.kind].caution || '' : '';
+  els.notice.hidden = !sel.caution;
+  els.notice.textContent = sel.caution;
 
   const showMap = prefs.view === 'map';
   els.list.hidden = showMap;
@@ -111,7 +139,7 @@ function render() {
   if (showMap) {
     els.more.hidden = true;
     map ||= new StoreMap(els.map, { onSelect: openStore, onPick: pickLocationOnMap });
-    map.render({ center: loc, radiusKm: radius, items: list.slice(0, 400), kindLabel: (s) => STORE_KINDS[s.k].short }).catch((err) => {
+    map.render({ center: loc, radiusKm: radius, items: list.slice(0, 400), kindLabel: (s) => (s.k === 'shop' ? shopType(s)?.name : null) || STORE_KINDS[s.k].short }).catch((err) => {
       els.mapWrap.innerHTML = `<div class="error-box"><strong>지도를 불러오지 못했어요</strong>${escapeHtml(err.message)}</div>`;
     });
   } else if (!list.length) {
@@ -130,7 +158,7 @@ async function load() {
   els.summary.textContent = '주변 매장을 불러오는 중…';
   try {
     data = await loadStores();
-    els.dataLine.textContent = `매장 위치: © OpenStreetMap 기여자 (${data.updatedAt ? data.updatedAt.slice(0, 10) : ''} 기준) · 참가격 조사 매장 포함`;
+    els.dataLine.textContent = `매장 위치: © OpenStreetMap 기여자 (${data.updatedAt ? data.updatedAt.slice(0, 10) : ''} 기준)${data.shopsBaseDate ? ` · 동네 술 가게: 소상공인시장진흥공단 상가(상권)정보 (${data.shopsBaseDate} 기준)` : ''} · 참가격 조사 매장 포함`;
     render();
   } catch (err) {
     els.list.innerHTML = `<div class="error-box"><strong>매장 정보를 불러오지 못했어요</strong>${escapeHtml(err.message)}<br><button type="button" class="text-button" data-retry>다시 시도</button></div>`;
@@ -196,7 +224,7 @@ export function initNearby() {
 
 /** #nearby 또는 #nearby/<종류> */
 export function showNearby(sub = '') {
-  if (sub && (sub === 'all' || STORE_KINDS[sub]) && sub !== prefs.kind) {
+  if (sub && validKind(sub) && sub !== prefs.kind) {
     prefs.kind = sub;
     save();
   }

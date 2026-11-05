@@ -208,3 +208,17 @@ test('가격대: 오래 숙성한 위스키·코냑 XO 는 올려 잡음', () =>
   assert.match(old.price.basis, /30년급/);
   assert.ok(analyzeName('발렌타인 파이니스트').price.krw_high <= 90000);
 });
+
+test('위스키 사전 2차: 독립 병입사 라벨은 원래 증류소, 새 브랜드들', () => {
+  assert.match(photo('GORDON & MACPHAIL CONNOISSEURS CHOICE MORTLACH 15 YEARS').name_ko, /몰트락/);
+  assert.match(photo('SIGNATORY VINTAGE GLENTAUCHERS 2010 CASK NO 123').name_ko, /글렌토커스/);
+  assert.match(photo('ROCK OYSTER BLENDED MALT SCOTCH WHISKY DOUGLAS LAING').name_ko, /더글라스 랭/); // 증류소가 없으면 병입사
+  assert.match(photo('BLACK & WHITE BLENDED SCOTCH WHISKY').name_ko, /블랙 앤 화이트/);
+  assert.match(photo('WHISTLEPIG 10 YEAR STRAIGHT RYE WHISKEY').name_ko, /위슬피그/);
+  assert.match(photo('LOT NO. 40 CANADIAN RYE WHISKY').name_ko, /랏 넘버 40/);
+  assert.match(photo('KARUIZAWA 1985 SINGLE CASK').name_ko, /가루이자와/);
+  // 미들턴(아이리시)은 흔한 지명 Middleton 와인으로 잡히지 않음
+  assert.ok(!matchBrands('Middleton Estate Pinot Noir Martinborough red wine', BRANDS, extractAttributes('Middleton Estate Pinot Noir red wine').votes).some((h) => h.brand.ko === '미들턴' && h.score >= 6));
+  const whisky = BRANDS.filter((b) => b.cat === 'whisky').length;
+  assert.ok(whisky >= 220, `위스키 ${whisky}곳`);
+});

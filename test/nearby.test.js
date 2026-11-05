@@ -100,3 +100,27 @@ test('제품 카탈로그와 참가격 상품 연결, 매장별 가격', () => {
   assert.deepEqual(at.map((x) => [x.product.id, x.price, x.discount]), [['1', 1240, true], ['2', 9850, false]]);
   assert.deepEqual(pricesAtStore(prices, 'nope'), []);
 });
+
+test('주류 전문점 가게 종류: 와인샵·보틀샵·할인점·전통주·나머지', async () => {
+  const { SHOP_TYPES } = await import('../public/js/content/index.js');
+  const { shopTypeOf, storeFilter } = await import('../public/js/lib/nearby.js');
+  const shops = [
+    { id: 'a', k: 'shop', b: '와인샵', d: 1 },
+    { id: 'b', k: 'shop', b: '보틀샵', d: 2 },
+    { id: 'c', k: 'shop', b: '주류 할인점', d: 3 },
+    { id: 'd', k: 'shop', b: '전통주', d: 0.5 },
+    { id: 'e', k: 'shop', b: '주류 판매점', d: 0.2 },
+    { id: 'f', k: 'shop', b: '사케', d: 0.3 },
+    { id: 'g', k: 'mart', b: '이마트', d: 0.1 },
+  ];
+  assert.deepEqual(shops.map((s) => shopTypeOf(s, SHOP_TYPES)), ['wine', 'bottle', 'discount', 'trad', 'etc', 'etc', null]);
+  assert.deepEqual(shops.filter(storeFilter('shop:wine', SHOP_TYPES)).map((s) => s.id), ['a']);
+  assert.deepEqual(shops.filter(storeFilter('shop:etc', SHOP_TYPES)).map((s) => s.id), ['e', 'f']);
+  assert.deepEqual(shops.filter(storeFilter('shop', SHOP_TYPES)).map((s) => s.id), ['a', 'b', 'c', 'd', 'e', 'f']);
+  assert.equal(shops.filter(storeFilter('all', SHOP_TYPES)).length, 7);
+  // 싸게 사기 좋은 순: 할인점이 먼저 (가게 종류 점수)
+  assert.equal(sortStores(shops.filter((s) => s.k === 'shop'), 'cheap', STORE_KINDS, SHOP_TYPES)[0].id, 'c');
+  // 종류 많은 순: 와인샵·보틀샵이 판매점보다 먼저
+  const v = sortStores(shops.filter((s) => s.k === 'shop'), 'variety', STORE_KINDS, SHOP_TYPES).map((s) => s.id);
+  assert.ok(v.indexOf('a') < v.indexOf('e') && v.indexOf('b') < v.indexOf('f'), v.join(','));
+});

@@ -9,7 +9,7 @@ import { baijiu, sake, soju, traditional } from './categories/asian.js';
 export { GLOSSARY } from './glossary.js';
 export { GUIDES } from './guides.js';
 export { PRODUCTS, TAG_LABELS } from './products.js';
-export { BUY_BY_CATEGORY, CHANNELS, STORE_KINDS, STORE_KIND_ORDER } from './channels.js';
+export { BUY_BY_CATEGORY, CHANNELS, SHOP_TYPES, STORE_KINDS, STORE_KIND_ORDER } from './channels.js';
 
 /** 화면에 보여 줄 순서 */
 export const CATEGORIES = [wine, whisky, beer, soju, traditional, sake, brandy, vodka, gin, rum, tequila, liqueur, baijiu, cocktail];

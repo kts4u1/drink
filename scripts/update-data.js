@@ -1,5 +1,5 @@
 // 앱이 읽는 데이터 파일을 새로 받습니다.
-//   data/stores.json   술을 살 수 있는 곳 (OpenStreetMap, 전국)
+//   data/stores.json   술을 살 수 있는 곳 (OpenStreetMap, 전국 + data/shops.json 의 동네 술 가게)
 //   data/prices.json   소주·맥주·막걸리 실제 판매 가격 (한국소비자원 참가격, 매주 금요일 조사)
 //
 // 사용법
@@ -15,6 +15,7 @@ import { distanceKm } from '../public/js/lib/geo.js';
 import { fetchJson, fetchWithTimeout, mapLimit } from './lib/http.js';
 import { OVERPASS_ENDPOINTS, OVERPASS_QUERY, martBrand, osmToStores } from './lib/osm.js';
 import { DEFAULT_KCA_BASE, SNAPSHOT_VERSION, buildPrices } from './lib/kca.js';
+import { SEMAS_SOURCE, mergeShops } from './lib/semas.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
@@ -154,15 +155,19 @@ async function main() {
 
   if (only !== 'prices') {
     const old = await readJson(storesFile);
+    // 동네 술 가게 (소상공인 상가정보, npm run data:shops 로 분기마다 받음)
+    const shops = await readJson(path.join(DATA_DIR, 'shops.json'));
+    const withShops = (list) => (shops?.shops ? mergeShops(list, shops.shops).stores : list);
     try {
       const { stores, osmBase } = await fetchStores();
-      const linked = linkKcaStores(stores, prices);
+      const linked = withShops(linkKcaStores(stores, prices));
       await writeJsonAtomic(storesFile, {
         version: 1,
-        source: 'OpenStreetMap',
+        source: shops?.shops ? `OpenStreetMap + ${SEMAS_SOURCE}` : 'OpenStreetMap',
         osmBase,
         updatedAt: new Date().toISOString(),
         pricesInspectDay: prices?.inspectDay || null,
+        shopsBaseDate: shops?.baseDate || null,
         count: linked.length,
         stores: linked,
       });
@@ -175,7 +180,7 @@ async function main() {
       // 참가격만 새로 받았으면 연결만 다시
       if (old?.stores && prices && old.pricesInspectDay !== prices.inspectDay) {
         const base = old.stores.filter((s) => !s.id.startsWith('kca')).map(({ c, ...rest }) => rest);
-        const linked = linkKcaStores(base, prices);
+        const linked = withShops(linkKcaStores(base, prices));
         await writeJsonAtomic(storesFile, { ...old, pricesInspectDay: prices.inspectDay, count: linked.length, stores: linked });
       }
     }

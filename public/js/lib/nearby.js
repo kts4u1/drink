@@ -37,13 +37,36 @@ export function countByKind(list) {
   return counts;
 }
 
-/** 정렬: distance(가까운 순) | cheap(싸게 사기 좋은 곳 먼저) | variety(종류 많은 곳 먼저) */
-export function sortStores(list, sort, kindInfo) {
+/** 주류 전문점의 가게 종류 (SHOP_TYPES 의 id). 전문점이 아니면 null */
+export function shopTypeOf(store, types) {
+  if (store.k !== 'shop') return null;
+  return (types.find((t) => t.labels.includes(store.b)) || types.find((t) => !t.labels.length))?.id || null;
+}
+
+/**
+ * 고르기 열쇠 → 매장 거르기 함수
+ * 'all' | 매장 종류(shop, mart …) | 'shop:<가게 종류>' (shop:wine, shop:bottle …)
+ */
+export function storeFilter(key, types = []) {
+  if (!key || key === 'all') return () => true;
+  if (key.startsWith('shop:')) {
+    const id = key.slice(5);
+    return (s) => s.k === 'shop' && shopTypeOf(s, types) === id;
+  }
+  return (s) => s.k === key;
+}
+
+/** 정렬: distance(가까운 순) | cheap(싸게 사기 좋은 곳 먼저) | variety(종류 많은 곳 먼저). types 를 주면 가게 종류별 점수 */
+export function sortStores(list, sort, kindInfo, types = null) {
   const arr = [...list];
   if (sort === 'cheap' || sort === 'variety') {
     const key = sort === 'cheap' ? 'cheap' : 'variety';
+    const score = (s) => {
+      const t = types && s.k === 'shop' ? types.find((x) => x.id === shopTypeOf(s, types)) : null;
+      return t?.[key] ?? kindInfo[s.k]?.[key] ?? 0;
+    };
     // 점수가 같으면 가까운 곳, 점수 1 차이는 3km 정도의 거리와 맞바꿈
-    arr.sort((a, b) => (kindInfo[b.k]?.[key] || 0) * 3 - b.d - ((kindInfo[a.k]?.[key] || 0) * 3 - a.d));
+    arr.sort((a, b) => score(b) * 3 - b.d - (score(a) * 3 - a.d));
   } else {
     arr.sort((a, b) => a.d - b.d);
   }

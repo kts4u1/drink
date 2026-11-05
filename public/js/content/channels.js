@@ -70,6 +70,18 @@ export const STORE_KINDS = {
 
 export const STORE_KIND_ORDER = ['shop', 'warehouse', 'mart', 'super', 'department', 'brewery'];
 
+/**
+ * 주류 전문점을 가게 종류로 나눠 보여 주기 (매장 기록의 b 값으로). labels 가 빈 것은 나머지 전부
+ * cheap·variety 는 "싸게 사기 좋은 순"·"종류 많은 순" 점수 (없으면 주류 전문점 점수)
+ */
+export const SHOP_TYPES = [
+  { id: 'wine', name: '와인샵', short: '와인샵', emoji: '🍷', labels: ['와인샵'], search: ['와인샵'], variety: 5 },
+  { id: 'bottle', name: '보틀샵', short: '보틀샵', emoji: '🥃', labels: ['보틀샵'], search: ['보틀샵', '위스키 샵'], variety: 5 },
+  { id: 'discount', name: '주류 할인점', short: '할인점', emoji: '🏷️', labels: ['주류 할인점'], search: ['주류 할인점', '세계주류'], cheap: 5, variety: 4 },
+  { id: 'trad', name: '전통주 가게', short: '전통주', emoji: '🍶', labels: ['전통주'], search: ['전통주', '막걸리 판매'], variety: 3 },
+  { id: 'etc', name: '주류 판매점', short: '판매점', emoji: '🍾', labels: [], search: ['주류 판매점'], variety: 3 },
+];
+
 /** 구매 채널 (매장 + 온라인·면세점). 싸게 사는 법 화면과 제품 화면에 쓰입니다 */
 export const CHANNELS = {
   warehouse: { ...STORE_KINDS.warehouse, kind: 'warehouse' },

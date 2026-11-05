@@ -72,11 +72,11 @@ export function martBrand(text) {
   return undefined;
 }
 
-function liquorShopLabel(tags, name) {
+export function liquorShopLabel(tags, name) {
   if (/주류\s*(백화점|할인|마트|창고|아울렛)|리쿼\s*(마트|스토어)|와인\s*(창고|아울렛)/.test(name)) return '주류 할인점';
   if (/주류\s*(상사|도매|유통|총판)|상사$|도매|유통$/.test(name)) return '주류 도매';
   if (/전통주|막걸리|양조|약주|酒/.test(name)) return '전통주';
-  if (/사케|sake|니혼슈/i.test(name)) return '사케';
+  if (/사케(?![이어])|\bsake\b|니혼슈/i.test(name)) return '사케';
   if (/위스키|whisk|보틀|bottle|리쿼|liquor|바틀/i.test(name)) return '보틀샵';
   if (/와인|wine|vin|비노|vino|까브|cave/i.test(name) || tags.shop === 'wine') return '와인샵';
   if (tags.shop === 'beverages') return '주류·음료';
