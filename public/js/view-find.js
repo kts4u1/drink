@@ -8,7 +8,6 @@ import { openProduct } from './sheets.js';
 import { debounce, escapeHtml, setPressed, storage } from './util.js';
 import { productCard } from './view-guide.js';
 
-const POPULAR = ['하이볼', '발베니', '조니워커', '모스카토', '샴페인', '버번', '스모키', '막걸리', '사케', '선물'];
 const PAGE = 24;
 
 const prefs = { cat: 'all', sort: 'recommend', ...storage.get('findPrefs', {}) };
@@ -101,12 +100,11 @@ function render() {
 }
 
 export function initFind() {
-  for (const id of ['findSearch', 'findPopular', 'findCats', 'findSort', 'findAsk', 'findRelated', 'findSummary', 'findList', 'findMore']) {
+  for (const id of ['findSearch', 'findCats', 'findSort', 'findAsk', 'findRelated', 'findSummary', 'findList', 'findMore']) {
     els[id.replace('find', '').toLowerCase()] = document.getElementById(id);
   }
   const count = document.getElementById('findBrandCount');
   if (count) count.textContent = `대표 제품 + 브랜드 사전 ${BRANDS.length}곳`;
-  els.popular.innerHTML = POPULAR.map((q) => `<button type="button" class="chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
   const save = () => storage.set('findPrefs', prefs);
 
   els.search.addEventListener(
@@ -118,15 +116,6 @@ export function initFind() {
       render();
     }, 150),
   );
-  els.popular.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-q]');
-    if (!btn) return;
-    els.search.value = btn.dataset.q;
-    query = btn.dataset.q;
-    prefs.cat = 'all';
-    shown = PAGE;
-    render();
-  });
   els.cats.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-cat]');
     if (!btn) return;
